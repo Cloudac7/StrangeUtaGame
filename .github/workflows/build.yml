@@ -120,13 +120,25 @@ jobs:
 
       # ── 调试信息 ──
       - name: Debug info
+        shell: python
         run: |
-          python --version
-          pip list --format=columns 2>/dev/null | head -30
-          echo "--- unidic_lite ---"
-          python -c "import unidic_lite; print(unidic_lite.DICDIR)" 2>/dev/null || echo "unidic_lite not importable"
-          echo "--- fugashi ---"
-          python -c "import fugashi; t=fugashi.Tagger(); print('Tagger OK')" 2>/dev/null || echo "fugashi Tagger failed"
+          import subprocess, sys
+          print(f"Python {sys.version}")
+          print("--- pip list ---")
+          subprocess.run([sys.executable, "-m", "pip", "list", "--format=columns"])
+          print("--- unidic_lite ---")
+          try:
+            import unidic_lite
+            print(f"DICDIR={unidic_lite.DICDIR}")
+          except Exception as e:
+            print(f"unidic_lite import error: {e}")
+          print("--- fugashi ---")
+          try:
+            import fugashi
+            t = fugashi.Tagger()
+            print("Tagger OK")
+          except Exception as e:
+            print(f"fugashi error: {e}")
 
       # ── 构建 ──
       - name: PyInstaller build
