@@ -87,7 +87,8 @@ jobs:
         run: exit 0
 
       - uses: actions/checkout@v4
-        with: { ref: ${{ inputs.ref || github.ref }} }
+        with:
+          ref: ${{ inputs.ref || github.ref }}
 
       - uses: actions/setup-python@v5
         with:
@@ -164,7 +165,8 @@ jobs:
         run: exit 0
 
       - uses: actions/checkout@v4
-        with: { ref: ${{ inputs.ref || github.ref }} }
+        with:
+          ref: ${{ inputs.ref || github.ref }}
 
       - uses: actions/setup-python@v5
         with:
