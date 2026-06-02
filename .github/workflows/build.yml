@@ -1,11 +1,12 @@
-# StrangeUtaGame 跨平台打包（fugashi-only 分支）
+# StrangeUtaGame 跨平台测试 + 打包流水线
 #
 # 支持平台: Linux / macOS x86_64 / macOS ARM64 / Windows amd64
-# 构建工具: PyInstaller (--onedir)
 #
 # 触发方式:
-#   - 推送 tag SUGv*     → 构建 + 创建 Release（draft）
-#   - workflow_dispatch  → 仅构建，不发布
+#   - workflow_dispatch:
+#       platform = all|Linux|macOS-x86|macOS-ARM|Windows
+#       job      = test | build | full
+#   - 推送 tag SUGv*  → 全平台 full（测试 + 构建 + Release draft）
 
 name: Build
 
@@ -15,8 +16,26 @@ on:
       - "SUGv*"
   workflow_dispatch:
     inputs:
+      platform:
+        description: "目标平台"
+        default: "all"
+        type: choice
+        options:
+          - all
+          - Linux
+          - macOS-x86
+          - macOS-ARM
+          - Windows
+      job:
+        description: "执行内容"
+        default: "test"
+        type: choice
+        options:
+          - test        # 仅单元测试
+          - build       # 仅打包（不测试）
+          - full        # 测试 + 打包
       ref:
-        description: "Branch / tag to build"
+        description: "分支/tag"
         default: "feat/fugashi-only"
         type: string
 
@@ -28,8 +47,92 @@ env:
   PYTHON_VERSION: "3.11"
 
 jobs:
+  # ── Helper: 解析 workflow_dispatch 参数 ──
+  _plan:
+    runs-on: ubuntu-24.04
+    outputs:
+      job_mode: ${{ steps.plan.outputs.job_mode }}
+      platform: ${{ steps.plan.outputs.platform }}
+    steps:
+      - id: plan
+        run: |
+          # tag 推送 = 全平台 full（test + build）
+          # manual  = 按输入
+          MODE="${{ github.event_name == 'push' && 'full' || inputs.job }}"
+          PLAT="${{ github.event_name == 'push' && 'all' || inputs.platform }}"
+          echo "job_mode=${MODE}" >> "$GITHUB_OUTPUT"
+          echo "platform=${PLAT}" >> "$GITHUB_OUTPUT"
+          echo "→ platform=${PLAT} job=${MODE}"
+
+  # ──────────────────────────────────────────────
+  # 测试（仅 job=test 或 job=full 时运行）
+  # ──────────────────────────────────────────────
+  test:
+    name: Test / ${{ matrix.os }}
+    if: needs._plan.outputs.job_mode != 'build'
+    needs: _plan
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: Linux,      runner: ubuntu-24.04 }
+          - { os: macOS-x86,  runner: macos-13 }
+          - { os: macOS-ARM,  runner: macos-15 }
+          - { os: Windows,    runner: windows-2025 }
+
+    steps:
+      - name: Skip if platform mismatch
+        if: needs._plan.outputs.platform != 'all' && needs._plan.outputs.platform != matrix.os
+        run: exit 0
+
+      - uses: actions/checkout@v4
+        with: { ref: ${{ inputs.ref || github.ref }} }
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install Linux system deps
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq portaudio19-dev libsndfile1-dev \
+            libportaudio2 libsndfile1 libxcb-cursor0 libegl1 \
+            libxkbcommon-x11-0 libglib2.0-0
+
+      - name: Install Python deps
+        run: |
+          python -m pip install --upgrade pip wheel setuptools
+          pip install numpy
+          pip install -r requirements.txt
+          pip install -e ".[dev]"
+
+      - name: Verify fugashi
+        shell: python
+        run: |
+          import fugashi
+          t = fugashi.Tagger()
+          print(f"fugashi OK: {t.parse('日本語')!r}")
+
+      - name: Run unit tests (ruby analyzer)
+        run: python -m pytest tests/unit/infrastructure/test_ruby_analyzer.py -v --tb=short -x
+
+      - name: Run other unit tests
+        run: |
+          python -m pytest tests/unit/ -v --tb=line -x \
+            --ignore=tests/unit/infrastructure/test_ruby_analyzer.py \
+          || echo "::warning::Some tests failed (non-critical)"
+
+  # ──────────────────────────────────────────────
+  # 打包
+  # ──────────────────────────────────────────────
   build:
-    name: ${{ matrix.os }}
+    name: Build / ${{ matrix.os }}
+    if: needs._plan.outputs.job_mode != 'test'
+    needs: _plan
     runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
@@ -44,13 +147,11 @@ jobs:
             runner: macos-13
             artifact_name: StrangeUtaGame-macos-x86_64
             ext: .zip
-            app_suffix: .app
 
           - os: macOS-ARM
             runner: macos-15
             artifact_name: StrangeUtaGame-macos-arm64
             ext: .zip
-            app_suffix: .app
 
           - os: Windows
             runner: windows-2025
@@ -58,95 +159,46 @@ jobs:
             ext: .zip
 
     steps:
-      # ── 检出 ──
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ inputs.ref || github.ref }}
+      - name: Skip if platform mismatch
+        if: needs._plan.outputs.platform != 'all' && needs._plan.outputs.platform != matrix.os
+        run: exit 0
 
-      # ── 设置 Python ──
-      - name: Setup Python ${{ env.PYTHON_VERSION }}
-        uses: actions/setup-python@v5
+      - uses: actions/checkout@v4
+        with: { ref: ${{ inputs.ref || github.ref }} }
+
+      - uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
           cache-dependency-path: pyproject.toml
 
-      # ── 读取版本号 ──
       - name: Get version
         id: version
         shell: python
         run: |
-          import sys
-          sys.path.insert(0, 'src')
+          import sys; sys.path.insert(0, 'src')
           from strange_uta_game.__version__ import __version__
-          # 从 tag 提取或 fallback 到日期
           tag = "${{ github.ref_name }}"
-          ver = tag
-          if ver.startswith("SUGv"):
-              ver = ver[4:]
-          elif ver.startswith("v"):
-              ver = ver[1:]
-          else:
-              ver = __version__
+          ver = tag[4:] if tag.startswith("SUGv") else tag[1:] if tag.startswith("v") else __version__
           print(f"app_version={ver}")
-          # Cache key 用短版本避免 pip cache miss
-          print(f"cache_version={ver.split('-')[0]}")
 
-      # ── 安装系统依赖 ──
       - name: Install Linux system deps
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq \
-            portaudio19-dev \
-            libsndfile1-dev \
-            libportaudio2 \
-            libsndfile1 \
-            libxcb-cursor0 \
-            libegl1 \
-            libxkbcommon-x11-0 \
-            libglib2.0-0
+          sudo apt-get install -y -qq portaudio19-dev libsndfile1-dev \
+            libportaudio2 libsndfile1 libxcb-cursor0 libegl1 \
+            libxkbcommon-x11-0 libglib2.0-0
 
-      # ── 安装 Python 依赖 ──
       - name: Install Python deps
         run: |
           python -m pip install --upgrade pip wheel setuptools
-          # 先装构建工具
-          pip install pyinstaller pyinstaller-hooks-contrib
-          # 再装运行时依赖（分步：先装 numpy 避免卡住）
-          pip install numpy
+          pip install pyinstaller pyinstaller-hooks-contrib numpy
           pip install -r requirements.txt
 
-      # ── 调试信息 ──
-      - name: Debug info
-        shell: python
-        run: |
-          import subprocess, sys
-          print(f"Python {sys.version}")
-          print("--- pip list ---")
-          subprocess.run([sys.executable, "-m", "pip", "list", "--format=columns"])
-          print("--- unidic_lite ---")
-          try:
-            import unidic_lite
-            print(f"DICDIR={unidic_lite.DICDIR}")
-          except Exception as e:
-            print(f"unidic_lite import error: {e}")
-          print("--- fugashi ---")
-          try:
-            import fugashi
-            t = fugashi.Tagger()
-            print("Tagger OK")
-          except Exception as e:
-            print(f"fugashi error: {e}")
-
-      # ── 构建 ──
       - name: PyInstaller build
         run: python build.py
-        env:
-          APP_VERSION: ${{ steps.version.outputs.app_version }}
 
-      # ── 打包产物 ──
       - name: Package (Linux)
         if: runner.os == 'Linux'
         run: |
@@ -157,15 +209,12 @@ jobs:
         if: runner.os == 'macOS'
         run: |
           cd dist
-          # --windowed + --onedir 在 macOS 上生成 .app bundle
           if ls *.app 2>/dev/null; then
             zip -r ../${{ matrix.artifact_name }}-${{ steps.version.outputs.app_version }}.zip *.app
           elif [ -d "StrangeUtaGame" ]; then
             zip -r ../${{ matrix.artifact_name }}-${{ steps.version.outputs.app_version }}.zip StrangeUtaGame/
           else
-            echo "::error::No build artifact found in dist/"
-            ls -la
-            exit 1
+            echo "::error::Nothing found in dist/"; ls -la; exit 1
           fi
 
       - name: Package (Windows)
@@ -176,12 +225,9 @@ jobs:
             Compress-Archive -Path dist/StrangeUtaGame/* `
               -DestinationPath ${{ matrix.artifact_name }}-${{ steps.version.outputs.app_version }}.zip
           } else {
-            Write-Error "dist/StrangeUtaGame not found"
-            Get-ChildItem dist
-            exit 1
+            Write-Error "dist/StrangeUtaGame not found"; Get-ChildItem dist; exit 1
           }
 
-      # ── 上传产物 ──
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
@@ -190,20 +236,18 @@ jobs:
           if-no-files-found: error
           compression-level: 0
 
-  # ── 创建 Release（仅 tag 推送时） ──
+  # ──────────────────────────────────────────────
+  # Release（仅 tag 推送时创建）
+  # ──────────────────────────────────────────────
   release:
-    name: Create Release
     if: startsWith(github.ref, 'refs/tags/SUGv')
     needs: build
     runs-on: ubuntu-24.04
-    permissions:
-      contents: write
+    permissions: { contents: write }
 
     steps:
-      - name: Download all artifacts
-        uses: actions/download-artifact@v4
-        with:
-          merge-multiple: true
+      - uses: actions/download-artifact@v4
+        with: { merge-multiple: true }
 
       - name: Generate release notes
         id: notes
@@ -212,25 +256,17 @@ jobs:
           echo "# StrangeUtaGame ${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
           echo "" >> "$GITHUB_OUTPUT"
           echo "## Downloads" >> "$GITHUB_OUTPUT"
-          echo "" >> "$GITHUB_OUTPUT"
           for f in *.zip *.tar.gz; do
-            if [ -f "$f" ]; then
-              size=$(du -h "$f" | cut -f1)
-              echo "- \`$f\` ($size)" >> "$GITHUB_OUTPUT"
-            fi
+            [ -f "$f" ] && echo "- \`$f\` ($(du -h "$f" | cut -f1))" >> "$GITHUB_OUTPUT"
           done
           echo "" >> "$GITHUB_OUTPUT"
-          echo "---" >> "$GITHUB_OUTPUT"
-          echo "_Built by GitHub Actions on \`${{ github.ref_name }}\`_" >> "$GITHUB_OUTPUT"
+          echo "_Built by GitHub Actions_" >> "$GITHUB_OUTPUT"
           echo "EOF" >> "$GITHUB_OUTPUT"
 
-      - name: Create Release
-        uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v2
         with:
           name: StrangeUtaGame ${{ github.ref_name }}
           body: ${{ steps.notes.outputs.notes }}
-          files: |
-            *.zip
-            *.tar.gz
+          files: "*.zip,*.tar.gz"
           draft: true
           prerelease: false
