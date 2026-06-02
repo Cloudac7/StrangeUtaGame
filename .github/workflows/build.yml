@@ -1,0 +1,224 @@
+# StrangeUtaGame 跨平台打包（fugashi-only 分支）
+#
+# 支持平台: Linux / macOS x86_64 / macOS ARM64 / Windows amd64
+# 构建工具: PyInstaller (--onedir)
+#
+# 触发方式:
+#   - 推送 tag SUGv*     → 构建 + 创建 Release（draft）
+#   - workflow_dispatch  → 仅构建，不发布
+
+name: Build
+
+on:
+  push:
+    tags:
+      - "SUGv*"
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Branch / tag to build"
+        default: "feat/fugashi-only"
+        type: string
+
+concurrency:
+  group: build-${{ github.ref_name }}
+  cancel-in-progress: true
+
+env:
+  PYTHON_VERSION: "3.11"
+
+jobs:
+  build:
+    name: ${{ matrix.os }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: Linux
+            runner: ubuntu-24.04
+            artifact_name: StrangeUtaGame-linux-x86_64
+            ext: .tar.gz
+
+          - os: macOS-x86
+            runner: macos-13
+            artifact_name: StrangeUtaGame-macos-x86_64
+            ext: .zip
+            app_suffix: .app
+
+          - os: macOS-ARM
+            runner: macos-15
+            artifact_name: StrangeUtaGame-macos-arm64
+            ext: .zip
+            app_suffix: .app
+
+          - os: Windows
+            runner: windows-2025
+            artifact_name: StrangeUtaGame-windows-amd64
+            ext: .zip
+
+    steps:
+      # ── 检出 ──
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+
+      # ── 设置 Python ──
+      - name: Setup Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      # ── 读取版本号 ──
+      - name: Get version
+        id: version
+        shell: python
+        run: |
+          import sys
+          sys.path.insert(0, 'src')
+          from strange_uta_game.__version__ import __version__
+          # 从 tag 提取或 fallback 到日期
+          tag = "${{ github.ref_name }}"
+          ver = tag
+          if ver.startswith("SUGv"):
+              ver = ver[4:]
+          elif ver.startswith("v"):
+              ver = ver[1:]
+          else:
+              ver = __version__
+          print(f"app_version={ver}")
+          # Cache key 用短版本避免 pip cache miss
+          print(f"cache_version={ver.split('-')[0]}")
+
+      # ── 安装系统依赖 ──
+      - name: Install Linux system deps
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq \
+            portaudio19-dev \
+            libsndfile1-dev \
+            libportaudio2 \
+            libsndfile1 \
+            libxcb-cursor0 \
+            libegl1 \
+            libxkbcommon-x11-0 \
+            libglib2.0-0
+
+      # ── 安装 Python 依赖 ──
+      - name: Install Python deps
+        run: |
+          python -m pip install --upgrade pip wheel setuptools
+          # 先装构建工具
+          pip install pyinstaller pyinstaller-hooks-contrib
+          # 再装运行时依赖（分步：先装 numpy 避免卡住）
+          pip install numpy
+          pip install -r requirements.txt
+
+      # ── 调试信息 ──
+      - name: Debug info
+        run: |
+          python --version
+          pip list --format=columns 2>/dev/null | head -30
+          echo "--- unidic_lite ---"
+          python -c "import unidic_lite; print(unidic_lite.DICDIR)" 2>/dev/null || echo "unidic_lite not importable"
+          echo "--- fugashi ---"
+          python -c "import fugashi; t=fugashi.Tagger(); print('Tagger OK')" 2>/dev/null || echo "fugashi Tagger failed"
+
+      # ── 构建 ──
+      - name: PyInstaller build
+        run: python build.py
+        env:
+          APP_VERSION: ${{ steps.version.outputs.app_version }}
+
+      # ── 打包产物 ──
+      - name: Package (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          cd dist
+          tar czf ../${{ matrix.artifact_name }}-${{ steps.version.outputs.app_version }}.tar.gz StrangeUtaGame/
+
+      - name: Package (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          cd dist
+          # --windowed + --onedir 在 macOS 上生成 .app bundle
+          if ls *.app 2>/dev/null; then
+            zip -r ../${{ matrix.artifact_name }}-${{ steps.version.outputs.app_version }}.zip *.app
+          elif [ -d "StrangeUtaGame" ]; then
+            zip -r ../${{ matrix.artifact_name }}-${{ steps.version.outputs.app_version }}.zip StrangeUtaGame/
+          else
+            echo "::error::No build artifact found in dist/"
+            ls -la
+            exit 1
+          fi
+
+      - name: Package (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          if (Test-Path "dist/StrangeUtaGame") {
+            Compress-Archive -Path dist/StrangeUtaGame/* `
+              -DestinationPath ${{ matrix.artifact_name }}-${{ steps.version.outputs.app_version }}.zip
+          } else {
+            Write-Error "dist/StrangeUtaGame not found"
+            Get-ChildItem dist
+            exit 1
+          }
+
+      # ── 上传产物 ──
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}-${{ steps.version.outputs.app_version }}
+          path: ${{ matrix.artifact_name }}-${{ steps.version.outputs.app_version }}${{ matrix.ext }}
+          if-no-files-found: error
+          compression-level: 0
+
+  # ── 创建 Release（仅 tag 推送时） ──
+  release:
+    name: Create Release
+    if: startsWith(github.ref, 'refs/tags/SUGv')
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+
+      - name: Generate release notes
+        id: notes
+        run: |
+          echo "notes<<EOF" >> "$GITHUB_OUTPUT"
+          echo "# StrangeUtaGame ${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+          echo "" >> "$GITHUB_OUTPUT"
+          echo "## Downloads" >> "$GITHUB_OUTPUT"
+          echo "" >> "$GITHUB_OUTPUT"
+          for f in *.zip *.tar.gz; do
+            if [ -f "$f" ]; then
+              size=$(du -h "$f" | cut -f1)
+              echo "- \`$f\` ($size)" >> "$GITHUB_OUTPUT"
+            fi
+          done
+          echo "" >> "$GITHUB_OUTPUT"
+          echo "---" >> "$GITHUB_OUTPUT"
+          echo "_Built by GitHub Actions on \`${{ github.ref_name }}\`_" >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: StrangeUtaGame ${{ github.ref_name }}
+          body: ${{ steps.notes.outputs.notes }}
+          files: |
+            *.zip
+            *.tar.gz
+          draft: true
+          prerelease: false
