@@ -112,6 +112,9 @@ args = [
     "--hidden-import=PyQt6.QtCore",
     "--hidden-import=PyQt6.QtGui",
     "--hidden-import=PyQt6.QtWidgets",
+    # 收集 Qt 平台/风格插件（qwindowsvistastyle 等），
+    # 确保 Windows Server 2025（CI）菜单无灰边框。
+    "--collect-all=PyQt6.QtWidgets",
     # 标准库可能被跳过的模块
     "--hidden-import=encodings.idna",
     "--hidden-import=pkg_resources",
