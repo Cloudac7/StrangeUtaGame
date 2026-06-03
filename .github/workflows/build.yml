@@ -198,18 +198,28 @@ jobs:
           pip install pyinstaller pyinstaller-hooks-contrib numpy
           pip install -r requirements.txt
 
-      - name: PyInstaller build
+      # ── 构建 Updater（先于主程序，因为 build.py 会复制它） ──
+      - name: Build Updater
+        run: python updater_app/build_updater.py
+
+      - name: Build Main App
         run: python build.py
 
+      # ── 打包 ──
       - name: Package (Linux)
         if: runner.os == 'Linux'
         run: |
+          # 主程序
           cd dist
           tar czf ../${{ matrix.artifact_name }}-${{ steps.version.outputs.app_version }}.tar.gz StrangeUtaGame/
+          # Updater
+          cd ../updater_app/dist
+          tar czf ../${{ matrix.artifact_name }}-updater-${{ steps.version.outputs.app_version }}.tar.gz Updater 2>/dev/null || true
 
       - name: Package (macOS)
         if: runner.os == 'macOS'
         run: |
+          # 主程序（.app bundle）
           cd dist
           if ls *.app 2>/dev/null; then
             zip -r ../${{ matrix.artifact_name }}-${{ steps.version.outputs.app_version }}.zip *.app
@@ -218,24 +228,44 @@ jobs:
           else
             echo "::error::Nothing found in dist/"; ls -la; exit 1
           fi
+          # Updater
+          cd ../updater_app/dist
+          if ls Updater 2>/dev/null; then
+            zip ../${{ matrix.artifact_name }}-updater-${{ steps.version.outputs.app_version }}.zip Updater 2>/dev/null || true
+          fi
 
       - name: Package (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
+          # 主程序
           if (Test-Path "dist/StrangeUtaGame") {
             Compress-Archive -Path dist/StrangeUtaGame/* `
               -DestinationPath ${{ matrix.artifact_name }}-${{ steps.version.outputs.app_version }}.zip
           } else {
             Write-Error "dist/StrangeUtaGame not found"; Get-ChildItem dist; exit 1
           }
+          # Updater
+          if (Test-Path "updater_app/dist/Updater.exe") {
+            Compress-Archive -Path updater_app/dist/Updater.exe `
+              -DestinationPath ${{ matrix.artifact_name }}-updater-${{ steps.version.outputs.app_version }}.zip
+          }
 
-      - name: Upload artifact
+      # ── 上传主程序 + Updater 产物 ──
+      - name: Upload main app
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact_name }}-${{ steps.version.outputs.app_version }}
           path: ${{ matrix.artifact_name }}-${{ steps.version.outputs.app_version }}${{ matrix.ext }}
           if-no-files-found: error
+          compression-level: 0
+
+      - name: Upload Updater
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}-updater-${{ steps.version.outputs.app_version }}
+          path: ${{ matrix.artifact_name }}-updater-${{ steps.version.outputs.app_version }}${{ matrix.ext }}
+          if-no-files-found: warn
           compression-level: 0
 
   # ──────────────────────────────────────────────
@@ -264,6 +294,9 @@ jobs:
           echo "" >> "$GITHUB_OUTPUT"
           echo "_Built by GitHub Actions_" >> "$GITHUB_OUTPUT"
           echo "EOF" >> "$GITHUB_OUTPUT"
+
+      - name: List artifacts
+        run: ls -lh *.zip *.tar.gz 2>/dev/null || echo "No artifacts"
 
       - uses: softprops/action-gh-release@v2
         with:
