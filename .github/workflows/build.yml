@@ -203,6 +203,26 @@ jobs:
           pip install -r requirements.txt
 
       # ── 构建 Updater（先于主程序，build.py 会自动复制） ──
+      # 缓存 PyInstaller workpath → 跨版本增量编译
+      - name: Restore Updater workpath cache
+        id: cache-updater-work
+        uses: actions/cache@v4
+        with:
+          path: updater_app/build/
+          key: updater-work-${{ runner.os }}-${{ hashFiles('updater_app/main.py', 'updater_app/build_updater.py', 'updater_app/__init__.py', 'src/strange_uta_game/__version__.py') }}
+          restore-keys: |
+            updater-work-${{ runner.os }}-
+
+      # 缓存二进制产物 → 同版本重跑直接跳过编译
+      - name: Restore Updater binary cache
+        id: cache-updater-bin
+        uses: actions/cache@v4
+        with:
+          path: updater_app/dist/${{ matrix.updater_name }}
+          key: updater-bin-${{ runner.os }}-${{ steps.version.outputs.app_version }}
+          restore-keys: |
+            updater-bin-${{ runner.os }}-
+
       - name: Build Updater
         run: python updater_app/build_updater.py --skip-if-exists
 
