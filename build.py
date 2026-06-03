@@ -1,12 +1,12 @@
-"""打包脚本 - 使用 PyInstaller 打包 StrangeUtaGame
+"""打包脚本 - 使用 PyInstaller 打包 StrangeUtaGame（fugashi-only 分支）
 
 注意事项：
 1. sounddevice 和 soundfile 依赖 PortAudio / libsndfile，需要确保 DLL 被打包
 2. PyQt6 有平台插件需要处理
-3. 日语注音用 WinRT IME（winrt.windows.globalization）；运行时依赖系统日语
-   功能 Language.Basic~~~ja-JP，应用内探测并引导安装（不再打包 Sudachi 词典）
+3. 日语注音用 fugashi (MeCab) + unidic-lite；跨平台，无需 WinRT IME
 4. numpy 是音频引擎核心依赖，不可排除
 5. 使用 --onedir 模式避免单文件解压问题
+6. fugashi 基于 Cython，打包时需要确保 _MeCab.dll / 词典文件被收集
 """
 
 import argparse
@@ -46,14 +46,11 @@ try:
     import sounddevice
     import soundfile
     import pedalboard
-    import pykakasi
     import qfluentwidgets
     import numpy
+    import fugashi
+    import unidic_lite
     import jaconv
-
-    # winrt 仅在 Windows 上为必选（跨平台移至 optional-dependencies）
-    if sys.platform == "win32":
-        import winrt.windows.globalization  # 日语注音主引擎（WinRT IME）
 
     print("✓ 所有依赖已安装")
     # 打印版本信息
@@ -62,30 +59,38 @@ try:
     print(f"  soundfile: {soundfile.__version__}")
     print(f"  pedalboard: {pedalboard.__version__}")
     print(f"  numpy: {numpy.__version__}")
-    print(f"  pykakasi: {getattr(pykakasi, '__version__', 'unknown')}")
+    _fugashi_ver = "unknown"
+    try:
+        from importlib.metadata import version as _ver
+        _fugashi_ver = _ver("fugashi")
+    except Exception:
+        pass
+    print(f"  fugashi: {_fugashi_ver}")
     print(f"  jaconv: {getattr(jaconv, '__version__', 'unknown')}")
 except ImportError as e:
     print(f"✗ 缺少依赖: {e}")
     print("请先运行: pip install -r requirements.txt")
-    print("  Windows: pip install -e .[win,dev]")
-    print("  Linux:   pip install -e .[unix,dev]")
+    print("  pip install -e .[dev]")
     sys.exit(1)
+
+# PyInstaller --add-data 分隔符：Windows 用 ;，Unix 用 :
+_DATA_SEP = ";" if sys.platform == "win32" else ":"
 
 # 构建 PyInstaller 参数
 args = [
     "main.py",  # 主脚本
     "--name=StrangeUtaGame",  # 应用名称
     "--onedir",  # 使用目录模式（推荐，启动更快）
-    "--windowed",  # Windows GUI 应用（无控制台窗口）
+    "--windowed",  # 隐藏控制台窗口（macOS 生成 .app bundle）
     "--noconfirm",  # 不确认覆盖
     # 数据文件
-    "--add-data=src/strange_uta_game;strange_uta_game",  # 源代码
-    "--add-data=src/strange_uta_game/resource/icon.ico;strange_uta_game/resource",  # 图标
-    "--add-data=src/strange_uta_game/config/config.json;strange_uta_game/config",  # 默认配置
-    "--add-data=src/strange_uta_game/config/dictionary.json;strange_uta_game/config",  # 默认字典
-    "--add-data=src/strange_uta_game/config/singers.json;strange_uta_game/config",  # 默认演唱者
-    "--add-data=src/strange_uta_game/config/e2k.txt;strange_uta_game/config",  # 英语注音词典 (CMU-based)
-    "--add-data=src/strange_uta_game/config/cmudict-0.7b;strange_uta_game/config",  # CMU Pronouncing Dictionary (e2k 引擎数据源)
+    f"--add-data=src/strange_uta_game{_DATA_SEP}strange_uta_game",  # 源代码
+    f"--add-data=src/strange_uta_game/resource/icon.ico{_DATA_SEP}strange_uta_game/resource",  # 图标
+    f"--add-data=src/strange_uta_game/config/config.json{_DATA_SEP}strange_uta_game/config",  # 默认配置
+    f"--add-data=src/strange_uta_game/config/dictionary.json{_DATA_SEP}strange_uta_game/config",  # 默认字典
+    f"--add-data=src/strange_uta_game/config/singers.json{_DATA_SEP}strange_uta_game/config",  # 默认演唱者
+    f"--add-data=src/strange_uta_game/config/e2k.txt{_DATA_SEP}strange_uta_game/config",  # 英语注音词典 (CMU-based)
+    f"--add-data=src/strange_uta_game/config/cmudict-0.7b{_DATA_SEP}strange_uta_game/config",  # CMU Pronouncing Dictionary (e2k 引擎数据源)
     # ── 隐藏导入（PyInstaller 可能检测不到的模块） ──
     # 音频
     "--hidden-import=sounddevice",
@@ -100,11 +105,8 @@ args = [
     "--hidden-import=numpy.fft",
     "--hidden-import=numpy.lib",
     # 日语处理
-    "--hidden-import=pykakasi",
-    "--hidden-import=pykakasi.kakasi",
-    "--hidden-import=winrt.windows.globalization",
-    "--hidden-import=winrt.windows.foundation",
-    "--hidden-import=winrt.windows.foundation.collections",
+    "--hidden-import=fugashi",
+    "--hidden-import=unidic_lite",
     "--hidden-import=jaconv",
     # Qt / UI
     "--hidden-import=qfluentwidgets",
@@ -112,8 +114,8 @@ args = [
     "--hidden-import=PyQt6.QtCore",
     "--hidden-import=PyQt6.QtGui",
     "--hidden-import=PyQt6.QtWidgets",
-    # 收集 Qt 平台/风格插件（qwindowsvistastyle 等），
-    # 确保 Windows Server 2025（CI）菜单无灰边框。
+    # 收集 Qt 平台插件和 Windows 风格插件（qwindowsvistastyle 等），
+    # 确保在 Windows Server 2025（CI）上菜单不出现灰色边框。
     "--collect-all=PyQt6.QtWidgets",
     # 标准库可能被跳过的模块
     "--hidden-import=encodings.idna",
@@ -134,12 +136,12 @@ args = [
     "--collect-all=sounddevice",
     "--collect-all=soundfile",
     "--collect-all=pedalboard",
-    "--collect-all=pykakasi",
+    "--collect-all=fugashi",
+    "--collect-all=unidic_lite",
     "--collect-all=qfluentwidgets",
-    "--collect-all=winrt",
     "--collect-binaries=soundfile",
-    # 图标
-    "--icon=src/strange_uta_game/resource/icon.ico",
+    # 图标（macOS 需要 .icns / .png，windows 需要 .ico）
+    *([f"--icon=src/strange_uta_game/resource/icon.ico"] if sys.platform == "win32" else []),
 ]
 
 # --clean 由命令行参数控制（改了 import 或打包配置时使用）
@@ -217,26 +219,27 @@ if sys.platform == "win32":
     else:
         print("! libportaudio64bit.dll 未找到，跳过 ARM64 DLL 修复")
 
-# ── 复制 Updater.exe（如已构建） ───────────────────────────────
-# Updater.exe 由 `python updater_app/build_updater.py` 独立打包，输出至
-# `updater_app/dist/Updater.exe`。本步骤幂等：若产物存在则复制到主程序 dist
-# 同级目录；否则视为打包失败（缺少 Updater 会被用户发现为"没有自动更新"）。
-_updater_src = PROJECT_ROOT / "updater_app" / "dist" / "Updater.exe"
+# ── 复制 Updater 二进制（如已构建） ────────────────────────────
+# Updater 由 `python updater_app/build_updater.py` 独立打包，输出至
+# `updater_app/dist/Updater[.exe]`（平台相关后缀）。
+# 本步骤幂等：若产物存在则复制到主程序 dist，否则警告但不阻断。
+_UPDATER_BIN = "Updater.exe" if sys.platform == "win32" else "Updater"
+_updater_src = PROJECT_ROOT / "updater_app" / "dist" / _UPDATER_BIN
 _updater_dst_dir = PROJECT_ROOT / "dist" / "StrangeUtaGame"
-_updater_dst = _updater_dst_dir / "Updater.exe"
+_updater_dst = _updater_dst_dir / _UPDATER_BIN
 _updater_found = False
 if _updater_dst_dir.exists():
     if _updater_src.exists():
         try:
             import shutil as _shutil
             _shutil.copy2(str(_updater_src), str(_updater_dst))
-            print(f"✓ 已复制 Updater.exe → {_updater_dst}")
+            print(f"✓ 已复制 {_UPDATER_BIN} → {_updater_dst}")
             _updater_found = True
         except Exception as _e:
-            print(f"✗ 复制 Updater.exe 失败: {_e}")
+            print(f"✗ 复制 {_UPDATER_BIN} 失败: {_e}")
     else:
         print(
-            "✗ 未找到 updater_app/dist/Updater.exe。\n"
+            f"✗ 未找到 updater_app/dist/{_UPDATER_BIN}。\n"
             "  自动更新功能不可用。请先运行:\n"
             "    python updater_app/build_updater.py\n"
             "  再重新打包主程序。\n"
@@ -265,7 +268,7 @@ print("=" * 60)
 print("1. 测试音频功能是否正常（播放/暂停/变速）")
 print("2. 检查项目保存和打开功能")
 print("3. 验证导出功能（LRC/KRA/ASS 等）")
-print("4. 测试日语注音功能（WinRT IME；缺日语功能时应弹出安装引导）")
+print("4. 测试日语注音功能（fugashi + unidic-lite）")
 print("5. 如缺少 DLL，请安装 Visual C++ Redistributable")
 print("   https://aka.ms/vs/17/release/vc_redist.x64.exe")
 print("=" * 60)
@@ -287,10 +290,8 @@ print("=" * 60)
 #   --hidden-import=numpy \
 #   --hidden-import=numpy.core \
 #   --hidden-import=numpy.fft \
-#   --hidden-import=pykakasi \
-#   --hidden-import=pykakasi.kakasi \
-#   --hidden-import=sudachipy \
-#   --hidden-import=sudachidict_core \
+#   --hidden-import=fugashi \
+#   --hidden-import=unidic_lite \
 #   --hidden-import=jaconv \
 #   --hidden-import=qfluentwidgets \
 #   --hidden-import=PyQt6.sip \
@@ -309,9 +310,8 @@ print("=" * 60)
 #   --exclude-module=test \
 #   --collect-all=sounddevice \
 #   --collect-all=soundfile \
-#   --collect-all=pykakasi \
+#   --collect-all=fugashi \
+#   --collect-all=unidic_lite \
 #   --collect-all=qfluentwidgets \
-#   --collect-data=sudachipy \
-#   --collect-data=sudachidict_core \
 #   --collect-binaries=soundfile \
 #   main.py
