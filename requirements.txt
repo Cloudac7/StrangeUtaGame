@@ -1,7 +1,16 @@
-# StrangeUtaGame - 锁定版本（与本地环境一致）
-# 更新方式: pip freeze → 筛选相关包 → 更新此文件
+# StrangeUtaGame — 运行时依赖锁定（跨平台）
+#
+# pip install -r requirements.txt
+#
+# 注音引擎：
+# - Windows: WinRT JapanesePhoneticAnalyzer
+# - macOS/Linux: SudachiPy + SudachiDict-small
+#
+# 如需开发/打包工具，额外安装：
+#   pip install -e ".[dev,build]"    # 从 pyproject.toml 安装
+#   pip install -r requirements-dev.txt  # 或使用锁定版本
 
-# ── 核心依赖 ──
+# ── 跨平台核心依赖 ──
 PyQt6==6.11.0
 PyQt6-Qt6==6.11.0
 PyQt6_sip==13.11.1
@@ -11,11 +20,11 @@ soundfile==0.13.1
 pedalboard==0.9.22
 numpy==2.4.4
 pykakasi==2.3.0
-# 日语分词/注音主引擎：WinRT IME（Windows.Globalization.JapanesePhoneticAnalyzer）
-# 运行时依赖系统日语 IME 功能 Language.Basic~~~ja-JP（应用内探测+引导安装）
-winrt-Windows.Globalization==3.2.1
-winrt-Windows.Foundation==3.2.1
-winrt-Windows.Foundation.Collections==3.2.1
+winrt-Windows.Globalization==3.2.1; platform_system == "Windows"
+winrt-Windows.Foundation==3.2.1; platform_system == "Windows"
+winrt-Windows.Foundation.Collections==3.2.1; platform_system == "Windows"
+SudachiPy==0.6.11; platform_system != "Windows"
+SudachiDict-small==20260428; platform_system != "Windows"
 jaconv==0.5.0
 pyphen==0.17.2
 requests==2.32.5

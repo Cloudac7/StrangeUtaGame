@@ -25,6 +25,7 @@ from PyQt6.QtWidgets import QScrollBar, QWidget
 from qfluentwidgets import Action, RoundMenu
 
 from strange_uta_game.backend.domain import Character, Project, Ruby
+from strange_uta_game.frontend.font_utils import DEFAULT_FONT_FAMILY
 from strange_uta_game.frontend.theme import theme
 
 
@@ -263,11 +264,11 @@ class KaraokePreview(QWidget):
         self._CLICK_MOVE_THRESHOLD = 5  # 像素级防抖阈值：移动超过此距离视为划词
 
         # 缓存字体和 QFontMetrics，避免每帧重建
-        self._font_current = QFont("Microsoft YaHei", 22, QFont.Weight.Bold)
-        self._font_context = QFont("Microsoft YaHei", 18)
-        self._font_ruby = QFont("Microsoft YaHei", 10)
-        self._font_checkpoint = QFont("Microsoft YaHei", 8)
-        self._font_line_number = QFont("Microsoft YaHei", 10)
+        self._font_current = QFont(DEFAULT_FONT_FAMILY, 22, QFont.Weight.Bold)
+        self._font_context = QFont(DEFAULT_FONT_FAMILY, 18)
+        self._font_ruby = QFont(DEFAULT_FONT_FAMILY, 10)
+        self._font_checkpoint = QFont(DEFAULT_FONT_FAMILY, 8)
+        self._font_line_number = QFont(DEFAULT_FONT_FAMILY, 10)
         self._fm_current = QFontMetrics(self._font_current)
         self._fm_context = QFontMetrics(self._font_context)
         self._fm_ruby = QFontMetrics(self._font_ruby)
@@ -592,7 +593,7 @@ class KaraokePreview(QWidget):
             self._alignment_margin = margin
             self.update()
 
-    def set_font_sizes(self, base_size: int, current_line_size: int = 0, ruby_size: int = 10, cp_size: int = 8, line_height_factor: float = 1.20, ruby_spacing: int = 4, main_font: str = "Microsoft YaHei", ruby_font: str = "Microsoft YaHei"):
+    def set_font_sizes(self, base_size: int, current_line_size: int = 0, ruby_size: int = 10, cp_size: int = 8, line_height_factor: float = 1.20, ruby_spacing: int = 4, main_font: str | None = None, ruby_font: str | None = None):
         """设置字体大小/字体族并自动适配预览行数。
 
         Args:
@@ -602,11 +603,11 @@ class KaraokePreview(QWidget):
             cp_size: 节奏点标记字体大小
             line_height_factor: 行高系数（默认1.20）
             ruby_spacing: Ruby与主文字的垂直间距（默认4px）
-            main_font: 主文字（当前行/上下文行）字体族，缺失时回退微软雅黑
-            ruby_font: Ruby 注音字体族，缺失时回退微软雅黑。
-                节奏点标记字体固定为微软雅黑，不随设置变化。
+            main_font: 主文字（当前行/上下文行）字体族，缺失时回退平台默认字体。
+            ruby_font: Ruby 注音字体族，缺失时回退平台默认字体。
+                节奏点标记字体固定为平台默认字体，不随设置变化。
         """
-        from strange_uta_game.frontend.font_utils import resolve_font_family
+        from strange_uta_game.frontend.font_utils import DEFAULT_FONT_FAMILY, resolve_font_family
 
         context_size = max(1, min(99, base_size))
         current_size = max(1, min(99, current_line_size if current_line_size > 0 else base_size + 4))
@@ -620,7 +621,7 @@ class KaraokePreview(QWidget):
         self._font_current = QFont(main_family, current_size, QFont.Weight.Bold)
         self._font_context = QFont(main_family, context_size)
         self._font_ruby = QFont(ruby_family, ruby_size)
-        self._font_checkpoint = QFont("Microsoft YaHei", cp_size)
+        self._font_checkpoint = QFont(DEFAULT_FONT_FAMILY, cp_size)
         self._fm_current = QFontMetrics(self._font_current)
         self._fm_context = QFontMetrics(self._font_context)
         self._fm_ruby = QFontMetrics(self._font_ruby)

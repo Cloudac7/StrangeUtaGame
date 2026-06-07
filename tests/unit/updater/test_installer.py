@@ -1,8 +1,33 @@
-"""``strange_uta_game.updater.installer`` 单元测试（仅命令行参数构造）。"""
+"""``strange_uta_game.updater.installer`` 单元测试。"""
 
 from pathlib import Path
 
-from strange_uta_game.updater.installer import LaunchPlan
+from strange_uta_game.updater.installer import (
+    LaunchPlan,
+    find_updater_exe,
+    updater_binary_name,
+)
+
+
+class TestUpdaterLocation:
+    def test_platform_binary_names(self):
+        assert updater_binary_name("win32") == "Updater.exe"
+        assert updater_binary_name("linux") == "Updater"
+        assert updater_binary_name("darwin") == "Updater"
+
+    def test_find_updater_next_to_main_executable(self, tmp_path):
+        updater = tmp_path / "Updater"
+        updater.write_bytes(b"binary")
+
+        assert find_updater_exe(tmp_path, platform="linux") == updater
+
+    def test_find_updater_inside_macos_app(self, tmp_path):
+        app_dir = tmp_path / "StrangeUtaGame.app"
+        updater = app_dir / "Contents" / "MacOS" / "Updater"
+        updater.parent.mkdir(parents=True)
+        updater.write_bytes(b"binary")
+
+        assert find_updater_exe(app_dir, platform="darwin") == updater
 
 
 class TestLaunchPlanCommandArgs:

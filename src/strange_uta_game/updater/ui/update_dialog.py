@@ -25,6 +25,7 @@ from qfluentwidgets import (
     TitleLabel,
 )
 
+from strange_uta_game.frontend.font_utils import DEFAULT_FONT_FAMILY
 from ..manifest import LatestRelease
 
 
@@ -93,7 +94,7 @@ class UpdateAvailableDialog(MessageBoxBase):
         body_view.setReadOnly(True)
         body_view.setMinimumHeight(260)
         body_view.setMinimumWidth(560)
-        body_view.setFont(QFont("Microsoft YaHei", 10))
+        body_view.setFont(QFont(DEFAULT_FONT_FAMILY, 10))
 
         if len(all_releases) > 1:
             sections: List[str] = []

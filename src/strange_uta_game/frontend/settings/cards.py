@@ -20,6 +20,8 @@ from qfluentwidgets import (
     SwitchButton,
 )
 
+from strange_uta_game.frontend.font_utils import DEFAULT_FONT_FAMILY
+
 
 class NoWheelSpinBox(SpinBox):
     """禁用滚轮的 SpinBox"""
@@ -298,7 +300,7 @@ class _KeyCaptureButton(PushButton):
         self._hold_timer.setInterval(self.HOLD_THRESHOLD_MS)
         self._hold_timer.timeout.connect(self._on_hold_timeout)
         self.setFixedWidth(140)
-        self.setFont(QFont("Microsoft YaHei", 9))
+        self.setFont(QFont(DEFAULT_FONT_FAMILY, 9))
         self.clicked.connect(self._start_listening)
 
     def _start_listening(self):
@@ -537,7 +539,7 @@ class ShortcutSettingCard(SettingCard):
         self.btn_key2.set_key(key2)
 
         lbl_or = QLabel("或", self)
-        lbl_or.setFont(QFont("Microsoft YaHei", 9))
+        lbl_or.setFont(QFont(DEFAULT_FONT_FAMILY, 9))
 
         self.btn_key1.key_captured.connect(lambda k: self._on_key_changed(self.btn_key1, k))
         self.btn_key2.key_captured.connect(lambda k: self._on_key_changed(self.btn_key2, k))

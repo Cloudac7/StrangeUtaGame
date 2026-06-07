@@ -122,8 +122,9 @@ class TestCacheRedirectContract:
     def test_no_env_is_standalone(self, monkeypatch):
         monkeypatch.delenv("SUG_CACHE_DIR", raising=False)
         from strange_uta_game.frontend import project_store as ps
+        from strange_uta_game.runtime_paths import cache_dir
 
-        assert ps._get_cache_dir().name == ".cache"
+        assert ps._get_cache_dir() == cache_dir()
 
 
 class TestEmbeddedUIContract:

@@ -6,7 +6,6 @@ FFmpeg 路径优先使用用户在「设置-关于」中配置的路径，未配
 
 from __future__ import annotations
 
-import os
 import shutil
 import subprocess
 import sys
@@ -26,11 +25,8 @@ VIDEO_EXTENSIONS = {
 
 _MP3_QUALITY = 128  # kbps
 _TARGET_SAMPLE_RATE = 44100  # Hz
-_CACHE_DIR_NAME = ".cache"
-
-
 def _get_cache_dir() -> Path:
-    """获取提取音频的存放目录（程序所在目录下的 .cache/extracted 子文件夹）。
+    """获取提取音频的存放目录（平台缓存目录的 extracted 子文件夹）。
 
     注意：必须放在 .cache 的子目录里，而不是 .cache 根目录。TSM 引擎加载时会调用
     clear_cache() 用 glob(".cache/*.mp3") 非递归删除 .cache 根目录下的所有 mp3——
@@ -38,13 +34,9 @@ def _get_cache_dir() -> Path:
     "找不到 ffmpeg 提取的音频文件"。放到子目录可避开这次清理，使其在切换引擎/重载时
     仍然有效。
     """
-    env_dir = os.environ.get("SUG_CACHE_DIR")
-    if env_dir:
-        cache_dir = Path(env_dir) / "extracted"
-        cache_dir.mkdir(parents=True, exist_ok=True)
-        return cache_dir
-    program_dir = Path(sys.argv[0]).resolve().parent
-    cache_dir = program_dir / _CACHE_DIR_NAME / "extracted"
+    from strange_uta_game.runtime_paths import cache_dir as runtime_cache_dir
+
+    cache_dir = runtime_cache_dir() / "extracted"
     cache_dir.mkdir(parents=True, exist_ok=True)
     return cache_dir
 

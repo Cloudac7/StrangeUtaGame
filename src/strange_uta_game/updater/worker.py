@@ -13,6 +13,7 @@ from typing import List, Optional, Tuple
 from PyQt6.QtCore import QObject, QThread, pyqtSignal
 
 from ..__version__ import __version__
+from ..frontend.thread_cleanup import stop_qthread
 from . import http_client
 from .manifest import LatestRelease, fetch_latest_release, fetch_releases_since, override_asset_urls
 from .proxy import resolve_proxy
@@ -198,3 +199,14 @@ class UpdateChecker(QObject):
             self._thread.deleteLater()
         self._thread = None
         self._worker = None
+
+    def shutdown(self, timeout_ms: int = 3000) -> bool:
+        """停止尚未结束的更新检查线程，供应用退出阶段调用。"""
+        thread = self._thread
+        if thread is None:
+            return True
+        ok = stop_qthread(thread, timeout_ms=timeout_ms)
+        if ok:
+            self._thread = None
+            self._worker = None
+        return ok

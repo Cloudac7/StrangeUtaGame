@@ -16,6 +16,7 @@ from qfluentwidgets import (
 )
 
 from strange_uta_game.__version__ import __version__ as _app_version
+from strange_uta_game.frontend.font_utils import DEFAULT_FONT_FAMILY
 from .base import SubSettingInterface
 
 
@@ -38,10 +39,10 @@ class AboutSubInterface(SubSettingInterface):
 
         self._path_card = SettingCard(FIF.FOLDER, "配置文件位置", "（未加载）", self.about_group)
         btn_open = PushButton("打开目录", self._path_card)
-        btn_open.setFont(QFont("Microsoft YaHei", 10))
+        btn_open.setFont(QFont(DEFAULT_FONT_FAMILY, 10))
         btn_open.clicked.connect(self._open_config_dir)
         btn_change = PushButton("更改位置", self._path_card)
-        btn_change.setFont(QFont("Microsoft YaHei", 10))
+        btn_change.setFont(QFont(DEFAULT_FONT_FAMILY, 10))
         btn_change.clicked.connect(self._change_config_dir)
         self._path_card.hBoxLayout.addWidget(btn_open, 0, Qt.AlignmentFlag.AlignRight)
         self._path_card.hBoxLayout.addWidget(btn_change, 0, Qt.AlignmentFlag.AlignRight)
@@ -56,21 +57,21 @@ class AboutSubInterface(SubSettingInterface):
             self.tools_group,
         )
         self._ffmpeg_path_label = PushButton("（使用环境变量）", self._ffmpeg_card)
-        self._ffmpeg_path_label.setFont(QFont("Microsoft YaHei", 9))
+        self._ffmpeg_path_label.setFont(QFont(DEFAULT_FONT_FAMILY, 9))
         self._ffmpeg_path_label.setEnabled(False)
         self._ffmpeg_path_label.setMaximumWidth(260)
         btn_browse_ffmpeg = PushButton("浏览", self._ffmpeg_card)
-        btn_browse_ffmpeg.setFont(QFont("Microsoft YaHei", 10))
+        btn_browse_ffmpeg.setFont(QFont(DEFAULT_FONT_FAMILY, 10))
         btn_browse_ffmpeg.clicked.connect(self._browse_ffmpeg)
         btn_clear_ffmpeg = PushButton("清除", self._ffmpeg_card)
-        btn_clear_ffmpeg.setFont(QFont("Microsoft YaHei", 10))
+        btn_clear_ffmpeg.setFont(QFont(DEFAULT_FONT_FAMILY, 10))
         btn_clear_ffmpeg.clicked.connect(self._clear_ffmpeg_path)
         self._ffmpeg_card.hBoxLayout.addWidget(self._ffmpeg_path_label, 0, Qt.AlignmentFlag.AlignRight)
         self._ffmpeg_card.hBoxLayout.addWidget(btn_browse_ffmpeg, 0, Qt.AlignmentFlag.AlignRight)
         self._ffmpeg_card.hBoxLayout.addWidget(btn_clear_ffmpeg, 0, Qt.AlignmentFlag.AlignRight)
         if sys.platform == "win32":
             self._btn_install_ffmpeg = PrimaryPushButton("一键安装", self._ffmpeg_card)
-            self._btn_install_ffmpeg.setFont(QFont("Microsoft YaHei", 10))
+            self._btn_install_ffmpeg.setFont(QFont(DEFAULT_FONT_FAMILY, 10))
             self._btn_install_ffmpeg.clicked.connect(self._install_ffmpeg)
             self._ffmpeg_card.hBoxLayout.addWidget(self._btn_install_ffmpeg, 0, Qt.AlignmentFlag.AlignRight)
         self._ffmpeg_card.hBoxLayout.addSpacing(16)
@@ -127,10 +128,13 @@ class AboutSubInterface(SubSettingInterface):
             return
 
         new_dir_path = Path(new_dir)
-        program_dir = Path(sys.argv[0]).resolve().parent
-        redirect_file = program_dir / ".config_redirect"
+        from strange_uta_game.runtime_paths import (
+            config_redirect_path,
+            default_config_dir,
+        )
 
-        if new_dir_path.resolve() == program_dir.resolve():
+        redirect_file = config_redirect_path()
+        if new_dir_path.resolve() == default_config_dir().resolve():
             try:
                 if redirect_file.exists():
                     redirect_file.unlink()
@@ -138,6 +142,7 @@ class AboutSubInterface(SubSettingInterface):
                 pass
         else:
             try:
+                redirect_file.parent.mkdir(parents=True, exist_ok=True)
                 redirect_file.write_text(str(new_dir_path), encoding="utf-8")
             except Exception as e:
                 InfoBar.error(title="更改失败", content=f"无法写入重定向文件: {e}",

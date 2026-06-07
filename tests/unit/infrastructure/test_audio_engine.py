@@ -12,6 +12,17 @@ from strange_uta_game.backend.infrastructure.audio import (
 )
 
 
+@pytest.fixture(autouse=True)
+def bass_without_output_device(monkeypatch, tmp_path):
+    """Run BASS tests without CI audio hardware or user cache writes."""
+    from strange_uta_game.backend.infrastructure.audio import bass_engine
+
+    monkeypatch.setenv("SUG_BASS_NO_SOUND", "1")
+    monkeypatch.setenv("SUG_CACHE_DIR", str(tmp_path / "cache"))
+    yield
+    bass_engine._bass.BASS_Free()
+
+
 @pytest.fixture
 def test_audio_file(tmp_path):
     """创建测试音频文件"""

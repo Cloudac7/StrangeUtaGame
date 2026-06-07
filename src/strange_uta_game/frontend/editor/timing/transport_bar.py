@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import sys
+
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QWheelEvent
 from PyQt6.QtWidgets import QFrame, QHBoxLayout, QLabel
@@ -69,7 +71,8 @@ class TransportBar(QFrame):
         layout.addWidget(self.btn_play)
 
         self.lbl_time = QLabel("00:00.00 / 00:00.00")
-        self.lbl_time.setStyleSheet("font-family: monospace; font-size: 12px;")
+        mono_family = "Menlo" if sys.platform == "darwin" else "monospace"
+        self.lbl_time.setStyleSheet(f"font-family: {mono_family}; font-size: 12px;")
         self.lbl_time.setMinimumWidth(140)
         layout.addWidget(self.lbl_time)
 

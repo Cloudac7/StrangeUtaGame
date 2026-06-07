@@ -658,8 +658,9 @@ class EditorInterface(QWidget):
         cp_size = settings.get("ui.cp_size", 8)
         line_height_factor = settings.get("ui.line_height_factor", 1.20)
         ruby_spacing = settings.get("ui.ruby_spacing", 4)
-        main_font = settings.get("ui.main_font", "Microsoft YaHei")
-        ruby_font = settings.get("ui.ruby_font", "Microsoft YaHei")
+        from strange_uta_game.frontend.font_utils import DEFAULT_FONT_FAMILY
+        main_font = settings.get("ui.main_font", DEFAULT_FONT_FAMILY)
+        ruby_font = settings.get("ui.ruby_font", DEFAULT_FONT_FAMILY)
         self.preview.set_font_sizes(base_font_size, current_line_size, ruby_size, cp_size, line_height_factor, ruby_spacing, main_font=main_font, ruby_font=ruby_font)
         # 应用 checkpoint 标记字符
         checkpoint_markers = settings.get("ui.checkpoint_markers", {})

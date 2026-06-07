@@ -27,13 +27,26 @@ classifiers = [
 ]
 
 dependencies = [
+    # ── 跨平台核心依赖 ──
     "PyQt6>=6.6.0",
-    "PyQt-Fluent-Widgets>=1.5.0",
+    "PyQt6-Fluent-Widgets>=1.5.0",
     "sounddevice>=0.4.6",
     "soundfile>=0.12.1",
     "pedalboard>=0.9.0",
     "numpy>=1.24.0",
     "pykakasi>=2.2.1",
+    "winrt-Windows.Globalization>=3.2.0; platform_system == 'Windows'",
+    "winrt-Windows.Foundation>=3.2.0; platform_system == 'Windows'",
+    "winrt-Windows.Foundation.Collections>=3.2.0; platform_system == 'Windows'",
+    "SudachiPy>=0.6.11; platform_system != 'Windows'",
+    "SudachiDict-small>=20260428; platform_system != 'Windows'",
+    "jaconv>=0.5.0",
+    "pyphen>=0.17.0",
+    "requests>=2.32.0",
+    "urllib3>=2.6.0",
+    "charset-normalizer>=3.4.0",
+    "certifi>=2025.0.0",
+    "idna>=3.0.0",
 ]
 
 [project.optional-dependencies]
@@ -46,6 +59,22 @@ dev = [
     "mypy>=1.7.1",
     "psutil>=5.9.0",
 ]
+# 打包工具
+build = [
+    "pyinstaller>=6.19.0",
+    "pyinstaller-hooks-contrib>=2026.4",
+]
+win = [
+    "winrt-Windows.Globalization>=3.2.0",
+    "winrt-Windows.Foundation>=3.2.0",
+    "winrt-Windows.Foundation.Collections>=3.2.0",
+]
+unix = [
+    "SudachiPy>=0.6.11",
+    "SudachiDict-small>=20260428",
+]
+# 全平台 + 开发
+all = ["strange-uta-game[win,unix,dev,build]"]
 
 [project.scripts]
 strange-uta-game = "strange_uta_game.main:main"
@@ -54,7 +83,14 @@ strange-uta-game = "strange_uta_game.main:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-strange_uta_game = ["resource/*", "bass/*.dll", "bass/x64/*.dll"]
+strange_uta_game = [
+    "resource/*",
+    "bass/*.dll",
+    "bass/x64/*.dll",
+    "bass/macos/arm64/*.dylib",
+    "bass/macos/x86_64/*.dylib",
+    "bass/linux64/*.so",
+]
 
 [tool.black]
 line-length = 88
@@ -107,7 +143,16 @@ warn_unused_ignores = true
 show_error_codes = true
 
 [[tool.mypy.overrides]]
-module = ["sounddevice", "soundfile", "pedalboard", "pedalboard.io", "numpy", "pykakasi"]
+module = [
+    "sounddevice",
+    "soundfile",
+    "pedalboard",
+    "pedalboard.io",
+    "numpy",
+    "pykakasi",
+    "sudachipy",
+    "sudachidict_small",
+]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

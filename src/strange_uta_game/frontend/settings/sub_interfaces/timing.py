@@ -6,6 +6,7 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QFont
 from qfluentwidgets import FluentIcon as FIF, PushButton, SettingCard, SettingCardGroup
 
+from strange_uta_game.frontend.font_utils import DEFAULT_FONT_FAMILY
 from ..calibration_dialog import CalibrationDialog
 from ..cards import ComboSettingCard, SpinSettingCard, SwitchSettingCard
 from .base import SubSettingInterface
@@ -54,7 +55,7 @@ class TimingSubInterface(SubSettingInterface):
         cal_card = SettingCard(FIF.SPEED_HIGH, "节拍器校准",
             "打开校准弹窗，跟随节拍器按空格键测量 Offset", cg)
         self.btn_cal_open = PushButton("开始校准", cal_card)
-        self.btn_cal_open.setFont(QFont("Microsoft YaHei", 10))
+        self.btn_cal_open.setFont(QFont(DEFAULT_FONT_FAMILY, 10))
         self.btn_cal_open.clicked.connect(self._open_calibration_dialog)
         cal_card.hBoxLayout.addWidget(self.btn_cal_open, 0, Qt.AlignmentFlag.AlignRight)
         cal_card.hBoxLayout.addSpacing(16)

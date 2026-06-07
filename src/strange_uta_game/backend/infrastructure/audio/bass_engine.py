@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import ctypes
 import os
+import platform
 import sys
 import threading
 import time
@@ -32,13 +33,43 @@ from .base import (
 
 _BASS_ROOT = Path(__file__).resolve().parent.parent.parent.parent / "bass"
 _IS_64BIT = ctypes.sizeof(ctypes.c_void_p) == 8
-_BASS_DIR = _BASS_ROOT / "x64" if _IS_64BIT and (_BASS_ROOT / "x64").exists() else _BASS_ROOT
 
-if sys.platform == "win32" and hasattr(os, "add_dll_directory"):
-    os.add_dll_directory(str(_BASS_DIR))
+if sys.platform == "win32":
+    _BASS_DIR = _BASS_ROOT / "x64" if _IS_64BIT and (_BASS_ROOT / "x64").exists() else _BASS_ROOT
+    _BASS_LIB = _BASS_DIR / "bass.dll"
+    _BASS_FX_LIB = _BASS_DIR / "bass_fx.dll"
+    _PLUGIN_PATTERN = "bass*.dll"
+    _PLUGIN_SKIP = {"bass.dll", "bass_fx.dll", "basswasapi.dll"}
+    if hasattr(os, "add_dll_directory"):
+        os.add_dll_directory(str(_BASS_DIR))
+elif sys.platform == "darwin":
+    _MAC_ARCH_DIR = "arm64" if platform.machine().lower() == "arm64" else "x86_64"
+    _BASS_DIR = _BASS_ROOT / "macos" / _MAC_ARCH_DIR
+    _BASS_LIB = _BASS_DIR / "libbass.dylib"
+    _BASS_FX_LIB = _BASS_DIR / "libbass_fx.dylib"
+    _PLUGIN_PATTERN = "libbass*"
+    _PLUGIN_SKIP = {"libbass.dylib", "libbass_fx.dylib", "libbasswasapi.dylib"}
+else:
+    # Linux
+    arch_dir = "linux64" if _IS_64BIT else "linux32"
+    _BASS_DIR = _BASS_ROOT / arch_dir
+    _BASS_LIB = _BASS_DIR / "libbass.so"
+    _BASS_FX_LIB = _BASS_DIR / "libbass_fx.so"
+    _PLUGIN_PATTERN = "*.so"
+    _PLUGIN_SKIP = {"libbass.so", "libbass_fx.so", "libbasswasapi.so"}
 
-_bass = ctypes.CDLL(str(_BASS_DIR / "bass.dll"))
-_bass_fx = ctypes.CDLL(str(_BASS_DIR / "bass_fx.dll"))
+# On Windows, BASS expects UTF-16 wide char strings with the BASS_UNICODE flag.
+# On Linux/macOS, BASS uses locale-encoded char strings; BASS_UNICODE is not needed.
+_USE_WIDE_CHAR = sys.platform == "win32"
+
+
+def _bass_str(s: str):
+    """Encode a file path for BASS, according to the platform's convention."""
+    return ctypes.c_wchar_p(s) if _USE_WIDE_CHAR else ctypes.c_char_p(s.encode("utf-8"))
+
+
+_bass = ctypes.CDLL(str(_BASS_LIB))
+_bass_fx = ctypes.CDLL(str(_BASS_FX_LIB))
 
 # ═══════════════════════════════════════════════════════════════════
 # BASS constants (from bass.h / bass_fx.h)
@@ -63,9 +94,23 @@ BASS_DATA_FLOAT = 0x40000000
 BASS_STREAM_DECODE = 0x200000
 BASS_STREAM_PRESCAN = 0x20000
 BASS_FX_FREESOURCE = 0x10000
-BASS_UNICODE = 0x80000000
+# BASS_UNICODE flag: on Windows it tells BASS the string is UTF-16 (wchar_t).
+# On Linux/Mac, UTF-8 is the system encoding already; the flag is 0 so all
+# existing `| BASS_UNICODE` expressions become no-ops on those platforms.
+BASS_UNICODE = 0x80000000 if sys.platform == "win32" else 0
 BASS_DEVICE_LATENCY = 0x100
 BASS_ERROR_ALREADY = 14
+
+
+def _no_sound_mode() -> bool:
+    """Return whether BASS should run without an output device."""
+    return os.environ.get("SUG_BASS_NO_SOUND", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
 
 # ═══════════════════════════════════════════════════════════════════
 # ctypes signatures — BASS core
@@ -196,7 +241,7 @@ def _load_bass_plugin(name: str) -> int:
     for path in candidates:
         if not path.exists():
             continue
-        handle = _bass.BASS_PluginLoad(ctypes.c_wchar_p(str(path)), BASS_UNICODE)
+        handle = _bass.BASS_PluginLoad(_bass_str(str(path)), BASS_UNICODE)
         if handle:
             _BASS_PLUGIN_HANDLES[name] = handle
             # print(f"[BassEngine] BASS plugin loaded: {path}")
@@ -282,6 +327,9 @@ class BassEngine(IAudioEngine):
 
     def _cache_output_latency(self) -> None:
         """Query BASS_INFO and cache output latency in milliseconds."""
+        if _no_sound_mode():
+            self._output_latency_ms = 0
+            return
         info = BASS_INFO()
         if _bass.BASS_GetInfo(ctypes.byref(info)):
             # BASS_INFO.latency is already expressed in milliseconds when
@@ -299,7 +347,10 @@ class BassEngine(IAudioEngine):
             # BASS_Free(), so our per-instance flag can become stale.
             self._initialized = False
 
-        if _bass.BASS_Init(-1, 44100, BASS_DEVICE_LATENCY, None, None):
+        no_sound = _no_sound_mode()
+        device = 0 if no_sound else -1
+        flags = 0 if no_sound else BASS_DEVICE_LATENCY
+        if _bass.BASS_Init(device, 44100, flags, None, None):
             self._initialized = True
             self._cache_output_latency()
             return True
@@ -449,7 +500,7 @@ class BassEngine(IAudioEngine):
         # especially at speeds != 1.0. Float gives SoundTouch headroom.
         self._decode_stream = _bass.BASS_StreamCreateFile(
             0,
-            ctypes.c_wchar_p(playback_path),
+            _bass_str(playback_path),
             0,
             0,
             BASS_STREAM_DECODE | BASS_STREAM_PRESCAN | BASS_SAMPLE_FLOAT | BASS_UNICODE,
@@ -458,8 +509,11 @@ class BassEngine(IAudioEngine):
             err = _bass.BASS_ErrorGetCode()
             raise AudioLoadError(f"BASS 无法打开文件 (error {err}): {playback_path}")
 
+        tempo_flags = BASS_FX_FREESOURCE
+        if _no_sound_mode():
+            tempo_flags |= BASS_STREAM_DECODE
         self._tempo_stream = _bass_fx.BASS_FX_TempoCreate(
-            self._decode_stream, BASS_FX_FREESOURCE
+            self._decode_stream, tempo_flags
         )
         if not self._tempo_stream:
             err = _bass.BASS_ErrorGetCode()

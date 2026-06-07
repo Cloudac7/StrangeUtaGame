@@ -31,6 +31,7 @@ from strange_uta_game.backend.domain.models import RubyPart
 from strange_uta_game.backend.infrastructure.parsers.annotated_text import (
     parse_timed_line,
 )
+from strange_uta_game.frontend.font_utils import DEFAULT_FONT_FAMILY
 from strange_uta_game.frontend.theme import theme
 import re
 
@@ -316,7 +317,7 @@ class LineDetailDialog(QDialog):
         )
         self.setWindowTitle(f"行详情 - {title_text}")
         self.resize(900, 500)
-        self.setFont(QFont("Microsoft YaHei", 10))
+        self.setFont(QFont(DEFAULT_FONT_FAMILY, 10))
 
         self.vbox = QVBoxLayout(self)
 
@@ -731,7 +732,7 @@ class EditInterface(QWidget):
 
         # Top Area
         self.title_label = QLabel("行编辑视图", self)
-        self.title_label.setFont(QFont("Microsoft YaHei", 24, QFont.Weight.Bold))
+        self.title_label.setFont(QFont(DEFAULT_FONT_FAMILY, 24, QFont.Weight.Bold))
         self.vbox.addWidget(self.title_label)
 
         self.desc_label = CaptionLabel("查看和编辑所有歌词行的打轴数据", self)
@@ -739,7 +740,7 @@ class EditInterface(QWidget):
 
         # Stats
         self.stats_label = QLabel("共 0 行 | 已完成 0 行 | 进度 0%", self)
-        self.stats_label.setFont(QFont("Microsoft YaHei", 10))
+        self.stats_label.setFont(QFont(DEFAULT_FONT_FAMILY, 10))
         self.vbox.addWidget(self.stats_label)
 
         # Toolbar

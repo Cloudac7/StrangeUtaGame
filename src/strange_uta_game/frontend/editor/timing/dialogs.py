@@ -63,6 +63,7 @@ from qfluentwidgets import (
     setCustomStyleSheet,
 )
 
+from strange_uta_game.frontend.font_utils import DEFAULT_FONT_FAMILY
 from strange_uta_game.frontend.theme import theme, ThemeColors
 
 from strange_uta_game.backend.domain import (
@@ -140,7 +141,7 @@ def _save_ruby_split_mode(radio_direct: QRadioButton, radio_by_char: QRadioButto
 # ── 字符编辑类对话框（修改所选字符 / 编辑字符(F2) / 批量变更）统一外观 ──
 # 三窗口共用同一默认尺寸与字体层级，保证视觉一致、信息区分度高。
 CHAR_DIALOG_SIZE = (600, 700)
-_FONT_FAMILY = "Microsoft YaHei"
+_FONT_FAMILY = DEFAULT_FONT_FAMILY
 
 # 字体层级（pt）：显示值 > 字符字形 > 主输入 > 字段标签/行内输入 > 说明
 FONT_DIALOG_BASE = 10      # 对话框基础字体
@@ -648,7 +649,7 @@ class InsertGuideSymbolDialog(QDialog):
 
         self.setWindowTitle("插入导唱符")
         self.resize(400, 320)
-        self.setFont(QFont("Microsoft YaHei", 10))
+        self.setFont(QFont(DEFAULT_FONT_FAMILY, 10))
 
         layout = QVBoxLayout(self)
 
@@ -1225,7 +1226,7 @@ class SetSingerByLineDialog(QDialog):
 
         self.setWindowTitle("按行设置演唱者")
         self.resize(1200, 900)
-        self.setFont(QFont("Microsoft YaHei", 10))
+        self.setFont(QFont(DEFAULT_FONT_FAMILY, 10))
 
         layout = QVBoxLayout(self)
 
@@ -1468,7 +1469,7 @@ class ApplySingerDialog(QDialog):
 
         self.setWindowTitle("应用演唱者")
         self.resize(400, 500)
-        self.setFont(QFont("Microsoft YaHei", 10))
+        self.setFont(QFont(DEFAULT_FONT_FAMILY, 10))
 
         layout = QVBoxLayout(self)
 
@@ -1588,7 +1589,7 @@ class CompleteTimestampDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle("补全时间戳")
         self.resize(480, 400)
-        self.setFont(QFont("Microsoft YaHei", 10))
+        self.setFont(QFont(DEFAULT_FONT_FAMILY, 10))
         self._apply_clicked = False
 
         # 读取配置
@@ -1754,7 +1755,7 @@ class AdjustRawTimestampDialog(QDialog):
         self.setWindowTitle("调整原始时间戳")
         self.setWindowModality(Qt.WindowModality.NonModal)
         self.resize(340, 200)
-        self.setFont(QFont("Microsoft YaHei", 10))
+        self.setFont(QFont(DEFAULT_FONT_FAMILY, 10))
 
         layout = QVBoxLayout(self)
         layout.setSpacing(10)
@@ -1849,7 +1850,7 @@ class SeparateSymbolTimestampDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle("分离符号时间戳")
         self.resize(600, 640)
-        self.setFont(QFont("Microsoft YaHei", 10))
+        self.setFont(QFont(DEFAULT_FONT_FAMILY, 10))
         self._apply_clicked = False
 
         # 读取上次设置

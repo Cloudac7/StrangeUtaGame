@@ -4,7 +4,8 @@
 参考 March7thAssistant 的 UI 架构。
 """
 
-from PyQt6.QtCore import Qt, QThread, QTimer, QEvent
+import sys
+from PyQt6.QtCore import Qt, QThread, QTimer, QEvent, QRect, QSize
 from PyQt6.QtGui import QKeySequence, QShortcut
 from PyQt6.QtWidgets import QApplication, QFileDialog, QMessageBox
 
@@ -138,17 +139,26 @@ class MainWindow(MSFluentWindow):
         import sys
         from pathlib import Path
 
+        icon_names = (
+            ("icon_macos.png", "icon.icns", "icon.ico")
+            if sys.platform == "darwin"
+            else ("icon.ico",)
+        )
         candidates = []
         # PyInstaller 打包后
         base = getattr(sys, "_MEIPASS", None)
         if base:
-            candidates.append(Path(base) / "strange_uta_game" / "resource" / "icon.ico")
+            candidates.extend(
+                Path(base) / "strange_uta_game" / "resource" / name
+                for name in icon_names
+            )
         # 开发环境：相对于本文件
-        candidates.append(
-            Path(__file__).resolve().parent.parent / "resource" / "icon.ico"
+        candidates.extend(
+            Path(__file__).resolve().parent.parent / "resource" / name
+            for name in icon_names
         )
         # 项目根目录
-        candidates.append(Path(sys.argv[0]).resolve().parent / "icon.ico")
+        candidates.extend(Path(sys.argv[0]).resolve().parent / name for name in icon_names)
 
         for p in candidates:
             if p.exists():
@@ -179,6 +189,7 @@ class MainWindow(MSFluentWindow):
         # Win10 兜底：Mica 材质不可用时，强制设置纯深色背景
         # 避免白底白字的灾难性渲染
         self._apply_win10_fallback_bg()
+        self._apply_platform_title_bar()
 
         self.setWindowTitle("StrangeUtaGame - 歌词打轴工具 Bilibili@不会说话的呆轩cc")
         self.setMinimumSize(1200, 800)
@@ -238,6 +249,43 @@ class MainWindow(MSFluentWindow):
         timeline = getattr(getattr(self, "editorInterface", None), "timeline", None)
         if timeline is not None and hasattr(timeline, "set_zoom_enabled"):
             timeline.set_zoom_enabled(False)
+
+    def _apply_platform_title_bar(self):
+        """按平台调整无边框标题栏按钮。
+
+        qfluentwidgets 的 ``MSFluentWindow`` 默认保留 Windows 风格的自定义
+        最小化/最大化/关闭按钮。macOS 上应使用系统 traffic-light 按钮，并把
+        标题栏内容从左侧按钮区域让开。
+        """
+        if sys.platform != "darwin":
+            return
+
+        title_bar = getattr(self, "titleBar", None)
+        if title_bar is None:
+            return
+
+        # 使用 macOS 原生红黄绿按钮，顺序与交互都交给系统处理。
+        if hasattr(self, "setSystemTitleBarButtonVisible"):
+            self.setSystemTitleBarButtonVisible(True)
+
+        for name in ("closeBtn", "minBtn", "maxBtn"):
+            button = getattr(title_bar, name, None)
+            if button is not None:
+                button.hide()
+
+        layout = getattr(title_bar, "hBoxLayout", None)
+        if layout is not None:
+            layout.setContentsMargins(84, 0, 0, 0)
+
+    def systemTitleBarRect(self, size: QSize) -> QRect:
+        """Return the macOS traffic-light button area.
+
+        qfluentwidgets positions macOS system buttons on the right to mimic the
+        Windows title bar. SUG follows the native macOS convention instead.
+        """
+        if sys.platform == "darwin":
+            return QRect(0, 0 if self.isFullScreen() else 8, 75, size.height())
+        return super().systemTitleBarRect(size)
 
     def _restore_window_geometry(self):
         """启动时从 config.json 恢复窗口大小与最大化状态（仅读取一次）。
@@ -769,11 +817,11 @@ class MainWindow(MSFluentWindow):
             if not accepted or choice == "later":
                 return
 
-            # 用户确认更新 → 启动 Updater.exe 并退出
+            # 用户确认更新 → 启动独立 Updater 并退出
             if not upd_installer.is_updater_available():
                 InfoBar.warning(
                     title="更新器未就绪",
-                    content="未找到 Updater.exe。请到 GitHub 手动下载完整安装包。",
+                    content="未找到更新器。请到 GitHub 手动下载完整安装包。",
                     orient=Qt.Orientation.Horizontal,
                     isClosable=True,
                     position=InfoBarPosition.TOP,
@@ -1070,6 +1118,7 @@ class MainWindow(MSFluentWindow):
                         AppSettings.set_default_provider(None)
                 except Exception:
                     pass
+            self._shutdown_background_threads()
             self._clear_llm_logs()
             e.accept()
             return
@@ -1090,6 +1139,7 @@ class MainWindow(MSFluentWindow):
                     self.editorInterface.release_resources()
                 except Exception:
                     pass
+            self._shutdown_background_threads()
             self._clear_llm_logs()
             QApplication.quit()
             e.accept()
@@ -1124,9 +1174,23 @@ class MainWindow(MSFluentWindow):
         # 释放编辑器资源
         if hasattr(self, "editorInterface"):
             self.editorInterface.release_resources()
+        self._shutdown_background_threads()
         self._clear_llm_logs()
         QApplication.quit()
         e.accept()
+
+    def _shutdown_background_threads(self) -> None:
+        """在 Qt 销毁窗口子对象前停止后台线程，避免 QThread 析构触发 abort。"""
+        checker = getattr(self, "_update_checker", None)
+        if checker is not None and hasattr(checker, "shutdown"):
+            try:
+                checker.shutdown(timeout_ms=3000)
+            except Exception:
+                pass
+
+        from strange_uta_game.frontend.thread_cleanup import stop_child_qthreads
+
+        stop_child_qthreads(self, timeout_ms=3000)
 
     @staticmethod
     def _clear_llm_logs() -> None:

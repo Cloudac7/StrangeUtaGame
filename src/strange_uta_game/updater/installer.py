@@ -1,23 +1,21 @@
-"""唤起独立 ``Updater.exe`` 接管更新流程。
+"""唤起独立 Updater 接管更新流程。
 
 设计要点：
 
-1. **位置约定** —— ``Updater.exe`` 与主程序 ``StrangeUtaGame.exe`` 同目录。这是
-   PyInstaller 单目录打包后最自然的位置；``build.py`` 会保证拷贝到位。
-   开发环境下（直接 ``python main.py``）不应该出现 Updater.exe，因此本模块在
-   未找到 Updater.exe 时返回 ``Result(launched=False, reason=...)``，由调用方
-   决定如何提示。
+1. **位置约定** —— Windows/Linux 下 Updater 与主程序同目录；macOS 下位于
+   ``StrangeUtaGame.app/Contents/MacOS``，同样与主可执行文件同级。
+   ``build.py`` 会保证拷贝到位。开发环境下找不到 Updater 时返回
+   ``Result(launched=False, reason=...)``，由调用方决定如何提示。
 
-2. **不被自身锁定** —— Updater.exe 也是 Windows 进程，正在运行时不能被替换。
-   我们在调起前把 Updater.exe 复制到 ``%TEMP%/StrangeUtaGameUpdater/Updater.exe``
-   再执行 temp 副本；安装完毕后由 Updater.exe 自己清理临时目录。
+2. **不被自身锁定** —— 调起前把 Updater 复制到系统临时目录再执行，避免运行中
+   的更新器阻止自身被替换。
 
-3. **主程序退出顺序** —— 主程序退出后 Updater.exe 才能解锁 ``StrangeUtaGame.exe``
-   与 ``_internal/``。本模块在 ``launch_updater`` 中传入主程序 PID，由 Updater
-   等待 PID 退出后再开始替换；调用方在调用本函数后应立刻 ``QApplication.quit``。
+3. **主程序退出顺序** —— 主程序退出后 Updater 才能替换应用文件。本模块在
+   ``launch_updater`` 中传入主程序 PID，由 Updater 等待 PID 退出后再开始替换；
+   调用方在调用本函数后应立刻 ``QApplication.quit``。
 
 4. **自更新** —— 主程序在启动 Updater 之前，先尝试从远端 app part zip 中提取
-   新的 Updater.exe 并替换本地版本，确保旧 updater 也能被更新。
+   新的 Updater 并替换本地版本，确保旧 updater 也能被更新。
 """
 
 from __future__ import annotations
@@ -35,9 +33,7 @@ from typing import List, Optional, Tuple
 
 log = logging.getLogger(__name__)
 
-# 与主程序同目录下的 Updater.exe 名字。
-UPDATER_EXE_NAME = "Updater.exe"
-# 临时目录名（在 %TEMP% 下）。
+# 临时目录名。
 TMP_DIR_NAME = "StrangeUtaGameUpdater"
 
 
@@ -59,7 +55,7 @@ class LaunchPlan:
     extras: List[str] = field(default_factory=list)
 
     def command_args(self, updater_exe: Path, current_pid: int) -> List[str]:
-        """生成传给 Updater.exe 的命令行参数。"""
+        """生成传给 Updater 的命令行参数。"""
         args: List[str] = [str(updater_exe)]
         args += ["--app-dir", str(self.app_dir)]
         args += ["--app-exe", self.app_exe_name]
@@ -94,11 +90,16 @@ class LaunchResult:
 # ───────────────────────── 工具 ─────────────────────────
 
 
-def find_app_dir() -> Path:
-    """返回主程序根目录（与 ``Updater.exe`` 同级）。
+def updater_binary_name(platform: Optional[str] = None) -> str:
+    """返回指定平台的 Updater 二进制文件名。"""
+    return "Updater.exe" if (platform or sys.platform) == "win32" else "Updater"
 
-    PyInstaller 模式下，``sys.executable`` 指向 ``StrangeUtaGame.exe``，因此
-    其父目录就是我们要的根。开发环境下回退到项目根（``main.py`` 所在）。
+
+def find_app_dir() -> Path:
+    """返回主程序可执行文件所在目录（与 Updater 同级）。
+
+    PyInstaller 模式下，Windows/Linux 返回 onedir 根目录；macOS 返回
+    ``.app/Contents/MacOS``。开发环境下回退到启动脚本所在目录。
     """
     if getattr(sys, "frozen", False):
         return Path(sys.executable).resolve().parent
@@ -107,36 +108,47 @@ def find_app_dir() -> Path:
 
 
 def find_app_exe_name() -> str:
-    """主程序 EXE 文件名。"""
+    """主程序可执行文件名。"""
     if getattr(sys, "frozen", False):
         return Path(sys.executable).name
-    return "StrangeUtaGame.exe"
+    return "StrangeUtaGame.exe" if sys.platform == "win32" else "StrangeUtaGame"
 
 
-def find_updater_exe(app_dir: Optional[Path] = None) -> Optional[Path]:
-    """定位与主程序同目录的 ``Updater.exe``；找不到返回 ``None``。"""
+def find_updater_exe(
+    app_dir: Optional[Path] = None,
+    platform: Optional[str] = None,
+) -> Optional[Path]:
+    """定位打包后的 Updater；找不到返回 ``None``。
+
+    ``app_dir`` 通常是主可执行文件所在目录。额外兼容传入 macOS ``.app``
+    根目录，以及旧版 ``_internal/updater`` 布局。
+    """
     app_dir = app_dir or find_app_dir()
-    p = app_dir / UPDATER_EXE_NAME
-    if p.exists():
-        return p
-    # 兼容：放在 _internal/updater/ 下的版本
-    p2 = app_dir / "_internal" / "updater" / UPDATER_EXE_NAME
-    if p2.exists():
-        return p2
+    binary_name = updater_binary_name(platform)
+    candidates = [
+        app_dir / binary_name,
+        app_dir / "Contents" / "MacOS" / binary_name,
+        app_dir / "_internal" / "updater" / binary_name,
+    ]
+    for candidate in candidates:
+        if candidate.is_file():
+            return candidate
     return None
 
 
 def _copy_updater_to_temp(updater_exe: Path) -> Path:
-    """把 Updater.exe 复制到临时目录，避免自身被锁。"""
+    """把 Updater 复制到临时目录，避免自身被锁。"""
     tmp_dir = Path(tempfile.gettempdir()) / TMP_DIR_NAME
     tmp_dir.mkdir(parents=True, exist_ok=True)
-    dest = tmp_dir / UPDATER_EXE_NAME
+    dest = tmp_dir / updater_exe.name
     # 已存在的副本可能正被另一次更新流程占用 —— 用唯一时间戳后缀兜底
     try:
         shutil.copy2(str(updater_exe), str(dest))
     except PermissionError:
         import time
-        dest = tmp_dir / f"Updater-{int(time.time())}.exe"
+        suffix = updater_exe.suffix
+        stem = updater_exe.name.removesuffix(suffix)
+        dest = tmp_dir / f"{stem}-{int(time.time())}{suffix}"
         shutil.copy2(str(updater_exe), str(dest))
     return dest
 
@@ -246,21 +258,21 @@ def _update_updater_from_remote(
     proxies: Optional[dict] = None,
     progress_cb=None,  # Optional[Callable[[str], None]]
 ) -> bool:
-    """尝试从远端 app part zip 提取并替换本地 Updater.exe。
+    """尝试从远端 app part zip 提取并替换本地 Updater。
 
-    解决鸡生蛋问题：已分发的旧 Updater.exe 没有自更新逻辑，无法更新自身。
+    解决鸡生蛋问题：已分发的旧 Updater 没有自更新逻辑，无法更新自身。
     主程序在启动 updater 之前调用本函数，先拉取 app part zip，提取新的
-    Updater.exe 并替换本地版本。这样即使旧 updater 没有自更新代码，
+    Updater 并替换本地版本。这样即使旧 updater 没有自更新代码，
     也能通过主程序间接触发更新。
 
     流程：
     1. 先拉取 manifest JSON（小文件），对比 ``parts.app.sha256`` 与本地
-       ``.installed_manifest.json`` 中记录的值；一致则 Updater.exe 未变，
+       ``.installed_manifest.json`` 中记录的值；一致则 Updater 未变，
        直接返回，**不发起任何 zip 下载**。
     2. sha256 不一致（或本地无清单）时，才下载 app.zip，并验证其 sha256。
-    3. 从 zip 中提取新 Updater.exe 并替换。
+    3. 从 zip 中提取新 Updater 并替换。
 
-    返回 ``True`` 表示成功更新了 Updater.exe（或已是最新），``False`` 表示
+    返回 ``True`` 表示成功更新了 Updater（或已是最新），``False`` 表示
     失败但不影响后续流程（降级使用旧 updater）。
 
     ``progress_cb`` 若提供，会在下载过程中以人类可读字符串回调（用于 UI 更新显示）。
@@ -268,12 +280,15 @@ def _update_updater_from_remote(
     import requests
 
     app_dir = plan.app_dir
-    local_updater = app_dir / UPDATER_EXE_NAME
+    local_updater = find_updater_exe(app_dir)
+    if local_updater is None:
+        return False
+    updater_name = local_updater.name
     proxies_dict = {"http": plan.proxy_url, "https": plan.proxy_url} if plan.proxy_url else None
 
-    # ── Step 1: 先用 manifest sha256 判断 Updater.exe 是否需要更新 ─────────────
+    # ── Step 1: 先用 manifest sha256 判断 Updater 是否需要更新 ─────────────
     # 拉取远端 manifest（小 JSON），读取本地清单，对比 app part sha256。
-    # 一致 → Updater.exe 未变化 → 直接返回，完全不下载 app.zip。
+    # 一致 → Updater 未变化 → 直接返回，完全不下载 app.zip。
     remote_manifest = _fetch_remote_manifest(plan, proxies_dict)
     local_manifest = _read_local_manifest(plan)
 
@@ -287,12 +302,12 @@ def _update_updater_from_remote(
     if remote_app_sha and local_app_sha:
         if remote_app_sha == local_app_sha:
             log.info(
-                "[self-update] app sha256 一致（%s…），Updater.exe 无需更新，跳过下载",
+                "[self-update] app sha256 一致（%s…），Updater 无需更新，跳过下载",
                 remote_app_sha[:12],
             )
             return True
         log.info(
-            "[self-update] app sha256 不同（本地 %s…, 远端 %s…），需更新 Updater.exe",
+            "[self-update] app sha256 不同（本地 %s…, 远端 %s…），需更新 Updater",
             local_app_sha[:12],
             remote_app_sha[:12],
         )
@@ -300,7 +315,7 @@ def _update_updater_from_remote(
         if not remote_app_sha:
             log.info("[self-update] 无法获取远端 manifest sha256，尝试下载 app.zip 兜底")
         else:
-            log.info("[self-update] 本地无安装清单（首次升级），下载 app.zip 更新 Updater.exe")
+            log.info("[self-update] 本地无安装清单（首次升级），下载 app.zip 更新 Updater")
 
     # ── Step 2: 下载 app.zip ─────────────────────────────────────────────────
     # 直接落到 Updater 的 parts 工作目录（%TEMP%/StrangeUtaGameUpdater/parts/），
@@ -408,15 +423,15 @@ def _update_updater_from_remote(
                     pass
                 continue
 
-            # ── Step 4: 提取 Updater.exe ─────────────────────────────────────
+            # ── Step 4: 提取 Updater ─────────────────────────────────────────
             with zipfile.ZipFile(str(canonical_zip)) as zf:
                 updater_entry = None
                 for name in zf.namelist():
-                    if name.endswith(UPDATER_EXE_NAME) and not name.endswith("/"):
+                    if Path(name).name == updater_name and not name.endswith("/"):
                         updater_entry = name
                         break
                 if updater_entry is None:
-                    log.warning("[self-update] app part zip 中未找到 %s，放弃此源", UPDATER_EXE_NAME)
+                    log.warning("[self-update] app part zip 中未找到 %s，放弃此源", updater_name)
                     try:
                         canonical_zip.unlink()
                     except OSError:
@@ -428,12 +443,12 @@ def _update_updater_from_remote(
             # 双重保险：字节级对比（应对 manifest 不可用时的兜底路径）
             if local_updater.exists() and local_updater.read_bytes() == new_bytes:
                 log.info(
-                    "[self-update] Updater.exe 字节一致，无需替换；"
+                    "[self-update] Updater 字节一致，无需替换；"
                     "app.zip 已保留在 %s 供 Updater 增量复用", canonical_zip,
                 )
                 return True
 
-            # 写入新 Updater.exe（带重试：Windows 下句柄释放可能有短暂延迟）
+            # 写入新 Updater（带重试：Windows 下句柄释放可能有短暂延迟）
             import time as _time
             for _attempt in range(3):
                 try:
@@ -445,7 +460,7 @@ def _update_updater_from_remote(
                     else:
                         raise
             log.info(
-                "[self-update] 已更新 Updater.exe（%d bytes）；"
+                "[self-update] 已更新 Updater（%d bytes）；"
                 "app.zip 保留在 %s，Updater 增量更新时将直接复用，无需重复下载",
                 len(new_bytes), canonical_zip,
             )
@@ -458,12 +473,12 @@ def _update_updater_from_remote(
             except OSError:
                 pass
 
-    log.warning("[self-update] 所有源均失败，将使用旧版 Updater.exe")
+    log.warning("[self-update] 所有源均失败，将使用旧版 Updater")
     return False
 
 
 def launch_updater(plan: LaunchPlan, progress_cb=None) -> LaunchResult:
-    """根据 ``plan`` 启动独立 Updater.exe；调用后调用方应立刻退出 Qt 应用。
+    """根据 ``plan`` 启动独立 Updater；调用后调用方应立刻退出 Qt 应用。
 
     返回 :class:`LaunchResult`；``launched=False`` 时由调用方提示用户。
 
@@ -475,18 +490,17 @@ def launch_updater(plan: LaunchPlan, progress_cb=None) -> LaunchResult:
         return LaunchResult(
             launched=False,
             reason=(
-                "未找到 Updater.exe。请重新下载完整安装包，或确保 "
-                "Updater.exe 与主程序位于同一目录。"
+                "未找到更新器。请重新下载完整安装包。"
             ),
         )
 
-    # 先尝试从远端更新 Updater.exe 自身（解决旧 updater 无自更新逻辑的问题）
+    # 先尝试从远端更新 Updater 自身（解决旧 updater 无自更新逻辑的问题）
     try:
         _update_updater_from_remote(plan, progress_cb=progress_cb)
         # 重新定位（可能已被更新）
         updater = find_updater_exe(plan.app_dir) or updater
     except Exception as e:
-        log.warning("自更新 Updater.exe 失败（忽略，继续使用旧版）: %s", e)
+        log.warning("自更新 Updater 失败（忽略，继续使用旧版）: %s", e)
 
     try:
         temp_copy = _copy_updater_to_temp(updater)
@@ -494,7 +508,7 @@ def launch_updater(plan: LaunchPlan, progress_cb=None) -> LaunchResult:
         return LaunchResult(
             launched=False,
             updater_path=str(updater),
-            reason=f"无法复制 Updater.exe 到临时目录: {e}",
+            reason=f"无法复制更新器到临时目录: {e}",
         )
 
     args = plan.command_args(temp_copy, os.getpid())

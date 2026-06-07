@@ -45,6 +45,7 @@ from qfluentwidgets import (
     PushButton,
 )
 
+from strange_uta_game.frontend.font_utils import DEFAULT_FONT_FAMILY
 from strange_uta_game.backend.infrastructure.network_dictionary import (
     fetch_source_entries,
     import_file_to_entries,
@@ -104,14 +105,14 @@ class NetworkSourceEntriesDialog(QDialog):
         layout.setSpacing(12)
 
         title = QLabel(f"网络词典条目（{source_name}）")
-        title.setFont(QFont("Microsoft YaHei", 14))
+        title.setFont(QFont(DEFAULT_FONT_FAMILY, 14))
         layout.addWidget(title)
 
         desc = QLabel(
             "拉取后的 entries 在此处直接编辑。顺序自顶向下递减优先级；新增条目默认置顶。\n"
             "注音格式：{原文||段1,段2,...}（块内 | 分 mora、, 分字符；空段=无 ruby）。"
         )
-        desc.setFont(QFont("Microsoft YaHei", 10))
+        desc.setFont(QFont(DEFAULT_FONT_FAMILY, 10))
         desc.setWordWrap(True)
         layout.addWidget(desc)
 
@@ -235,7 +236,7 @@ class NetworkDictionaryDialog(QDialog):
         layout.setSpacing(12)
 
         title = QLabel("网络读音词典")
-        title.setFont(QFont("Microsoft YaHei", 14))
+        title.setFont(QFont(DEFAULT_FONT_FAMILY, 14))
         layout.addWidget(title)
 
         desc_lines = [
@@ -244,7 +245,7 @@ class NetworkDictionaryDialog(QDialog):
             "总开关「启用网络词典」位于设置卡片，本对话框仅编辑源列表与条目。",
         ]
         desc = QLabel("\n".join(desc_lines))
-        desc.setFont(QFont("Microsoft YaHei", 10))
+        desc.setFont(QFont(DEFAULT_FONT_FAMILY, 10))
         desc.setWordWrap(True)
         layout.addWidget(desc)
 

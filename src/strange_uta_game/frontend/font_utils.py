@@ -8,8 +8,10 @@
 from __future__ import annotations
 
 from PyQt6.QtGui import QFont, QFontDatabase, QFontMetrics
+import sys
 
-DEFAULT_FONT_FAMILY = "Microsoft YaHei"
+DEFAULT_FONT_FAMILY = "PingFang SC" if sys.platform == "darwin" else "Microsoft YaHei"
+LEGACY_DEFAULT_FONT_FAMILY = "Microsoft YaHei"
 
 
 def resolve_font_family(family: str | None) -> str:

@@ -6,6 +6,9 @@
 
 使用：
 
+主程序 ``build.py`` 会自动把 Updater 复制到最终产物中：Windows/Linux 位于
+``dist/StrangeUtaGame/``，macOS 位于 App 的 ``Contents/MacOS/``。
+
 .. code:: bat
 
     python updater_app\\build_updater.py

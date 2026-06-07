@@ -15,6 +15,8 @@ from PyQt6.QtWidgets import (
 )
 from qfluentwidgets import LineEdit, PrimaryPushButton, PushButton, SpinBox
 
+from strange_uta_game.frontend.font_utils import DEFAULT_FONT_FAMILY
+
 
 class NicokaraTagsDialog(QDialog):
     """Nicokara 导出元数据标签设置对话框
@@ -36,7 +38,7 @@ class NicokaraTagsDialog(QDialog):
         layout.setSpacing(14)
 
         title = QLabel("Nicokara 标签设置")
-        title.setFont(QFont("Microsoft YaHei", 14))
+        title.setFont(QFont(DEFAULT_FONT_FAMILY, 14))
         layout.addWidget(title)
 
         scroll = QScrollArea()
@@ -55,10 +57,10 @@ class NicokaraTagsDialog(QDialog):
         def _row(label_text: str) -> LineEdit:
             row = QHBoxLayout()
             lbl = QLabel(label_text)
-            lbl.setFont(QFont("Microsoft YaHei", 10))
+            lbl.setFont(QFont(DEFAULT_FONT_FAMILY, 10))
             lbl.setFixedWidth(120)
             edit = LineEdit()
-            edit.setFont(QFont("Microsoft YaHei", 10))
+            edit.setFont(QFont(DEFAULT_FONT_FAMILY, 10))
             row.addWidget(lbl)
             row.addWidget(edit)
             form_layout.addLayout(row)
@@ -72,13 +74,13 @@ class NicokaraTagsDialog(QDialog):
         # @SilencemSec — SpinBox
         silence_row = QHBoxLayout()
         silence_lbl = QLabel("@SilencemSec（静音）")
-        silence_lbl.setFont(QFont("Microsoft YaHei", 10))
+        silence_lbl.setFont(QFont(DEFAULT_FONT_FAMILY, 10))
         silence_lbl.setFixedWidth(120)
 
         self._spin_silence = SpinBox()
         self._spin_silence.setRange(0, 99999)
         self._spin_silence.setSuffix(" ms")
-        self._spin_silence.setFont(QFont("Microsoft YaHei", 10))
+        self._spin_silence.setFont(QFont(DEFAULT_FONT_FAMILY, 10))
         silence_row.addWidget(silence_lbl)
         silence_row.addWidget(self._spin_silence)
         form_layout.addLayout(silence_row)
@@ -87,7 +89,7 @@ class NicokaraTagsDialog(QDialog):
 
         # @Custom 动态列表
         custom_lbl = QLabel("@Custom（自定义标签）")
-        custom_lbl.setFont(QFont("Microsoft YaHei", 10))
+        custom_lbl.setFont(QFont(DEFAULT_FONT_FAMILY, 10))
         scroll_layout.addWidget(custom_lbl)
 
         self._custom_list: list[LineEdit] = []
@@ -97,7 +99,7 @@ class NicokaraTagsDialog(QDialog):
 
         custom_btn_row = QHBoxLayout()
         btn_add_custom = PushButton("添加自定义行", self)
-        btn_add_custom.setFont(QFont("Microsoft YaHei", 10))
+        btn_add_custom.setFont(QFont(DEFAULT_FONT_FAMILY, 10))
         btn_add_custom.clicked.connect(self._on_add_custom)
         custom_btn_row.addWidget(btn_add_custom)
         custom_btn_row.addStretch()
@@ -129,7 +131,7 @@ class NicokaraTagsDialog(QDialog):
 
     def _on_add_custom(self, value: str = ""):
         edit = LineEdit()
-        edit.setFont(QFont("Microsoft YaHei", 10))
+        edit.setFont(QFont(DEFAULT_FONT_FAMILY, 10))
         edit.setPlaceholderText("自定义标签内容，例：@MyTag=value")
         if value:
             edit.setText(value)

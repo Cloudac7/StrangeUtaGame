@@ -28,6 +28,7 @@ from qfluentwidgets import (
     SwitchButton,
 )
 
+from strange_uta_game.frontend.font_utils import DEFAULT_FONT_FAMILY
 from ...__version__ import __version__
 from .. import installer
 from ..settings import UpdaterSettings, ensure_persisted
@@ -94,7 +95,7 @@ class _SourceOrderCard(SettingCard):
             parent,
         )
         self.btn_edit = PushButton("编辑顺序", self)
-        self.btn_edit.setFont(QFont("Microsoft YaHei", 10))
+        self.btn_edit.setFont(QFont(DEFAULT_FONT_FAMILY, 10))
         self.btn_edit.setMinimumWidth(110)
         self.hBoxLayout.addWidget(self.btn_edit, 0, Qt.AlignmentFlag.AlignRight)
         self.hBoxLayout.addSpacing(16)
@@ -129,7 +130,7 @@ class _CheckNowCard(SettingCard):
             parent,
         )
         self.btn = PushButton("检查更新", self)
-        self.btn.setFont(QFont("Microsoft YaHei", 10))
+        self.btn.setFont(QFont(DEFAULT_FONT_FAMILY, 10))
         self.btn.setMinimumWidth(120)
         self.hBoxLayout.addWidget(self.btn, 0, Qt.AlignmentFlag.AlignRight)
         self.hBoxLayout.addSpacing(16)
@@ -330,11 +331,11 @@ def _show_update_dialog(parent: "SettingsInterface", result: CheckResult) -> Non
     if not accepted or choice == "later":
         return
 
-    # 用户点击立即更新 —— 启动 Updater.exe 并退出应用
+    # 用户点击立即更新 —— 启动独立 Updater 并退出应用
     if not installer.is_updater_available():
         InfoBar.error(
             title="更新器未就绪",
-            content="缺少 Updater.exe。请到 GitHub Release 手动下载最新版本。",
+            content="缺少更新器。请到 GitHub Release 手动下载最新版本。",
             orient=Qt.Orientation.Horizontal,
             isClosable=True,
             position=InfoBarPosition.TOP,

@@ -4,8 +4,8 @@
 - 切换播放速度（≠ 1.0x）时，后台 worker 用 Pedalboard 的 time_stretch 渲染，
   结果保存到磁盘缓存文件，不占用大量内存。
 - 播放时从磁盘缓存读取到内存。
-- 缓存文件位于程序所在目录下的 .cache 文件夹，更换歌曲或退出时自动清理。
-- 1.0x 特殊路径：直接返回原始 PCM 引用，零渲染开销。
+- 缓存文件位于平台缓存目录，更换歌曲或退出时自动清理。
+- 1.0x 特殊路径：直接解码源 MP3，不进行 TSM 渲染。
 - 缓存文件采用 MP3 格式压缩，节省磁盘空间。
 
 分块并行渲染架构：
@@ -58,7 +58,6 @@ def _set_worker_thread_priority() -> None:
         pass
 
 _SPEED_QUANT = 2  # round(speed, 2)，0.01 精度
-_CACHE_DIR_NAME = ".cache"
 _MP3_QUALITY = 128  # MP3 比特率 (kbps)
 
 # 分块渲染参数
@@ -80,16 +79,10 @@ def _quantize(speed: float) -> float:
 
 
 def _get_cache_dir() -> Path:
-    """获取缓存目录（程序所在目录下的 .cache 文件夹）"""
-    env_dir = os.environ.get("SUG_CACHE_DIR")
-    if env_dir:
-        cache_dir = Path(env_dir)
-        cache_dir.mkdir(parents=True, exist_ok=True)
-        return cache_dir
-    program_dir = Path(sys.argv[0]).resolve().parent
-    cache_dir = program_dir / _CACHE_DIR_NAME
-    cache_dir.mkdir(parents=True, exist_ok=True)
-    return cache_dir
+    """获取平台运行时缓存目录。"""
+    from strange_uta_game.runtime_paths import cache_dir
+
+    return cache_dir()
 
 
 def _get_cache_path(song_name: str, speed: float) -> Path:

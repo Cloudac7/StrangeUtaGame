@@ -4,7 +4,7 @@
 
 .. code::
 
-    Updater.exe
+    Updater
         --app-dir <主程序所在目录>
         --app-exe <主程序 EXE 文件名>
         --target-version <X.Y.Z>
@@ -55,7 +55,7 @@ import requests
 
 def _force_utf8_stdio() -> None:
     """强制 stdout/stderr 使用 UTF-8 —— 避免 Windows 控制台默认 cp1252/cp936 时
-    在打包后的 Updater.exe 中 ``print/log`` 抛 ``UnicodeEncodeError``。"""
+    在打包后的 Updater 中 ``print/log`` 抛 ``UnicodeEncodeError``。"""
     for stream_name in ("stdout", "stderr"):
         stream = getattr(sys, stream_name, None)
         if stream is None or not hasattr(stream, "reconfigure"):
@@ -91,7 +91,7 @@ LOCAL_MANIFEST_FILENAME = ".installed_manifest.json"
 # manifest schema 兼容版本（远端 manifest.schema 必须 <= 该值才走增量；否则降级全量）。
 SUPPORTED_MANIFEST_SCHEMA = 1
 # Updater 自身的文件名；自更新时 rename 为 ``<name>.old``，下次启动时清理。
-UPDATER_EXE_NAME = "Updater.exe"
+UPDATER_BINARY_NAME = "Updater.exe" if sys.platform == "win32" else "Updater"
 
 
 # ───────────────────────── 数据结构 ─────────────────────────
@@ -198,7 +198,7 @@ def _cleanup_old_files(app_dir: Path, log: logging.Logger) -> None:
     """清理上次成功更新后遗留的 ``*.old`` 备份文件/目录。
 
     Windows 允许 rename 运行中的 exe，但不允许 delete/overwrite。
-    自更新流程把旧 Updater.exe rename 为 .old，更新完成后也会留下主程序的
+    自更新流程把旧 Updater rename 为 .old，更新完成后也会留下主程序的
     .old 备份（更新失败时保留以便手动恢复）。这里在下次启动时做统一清理。
 
     安全策略：只有当对应的"无 .old 后缀"版本已存在时才删除备份，
@@ -666,22 +666,21 @@ def apply_update(
                 pass
             return False, f"备份 EXE 失败: {e}（主程序可能未完全退出）"
 
-    # 自更新 Updater.exe：rename 为 .old（Windows 允许 rename 运行中的 exe），
-    # 复制新的；下次启动时 _cleanup_old_files 会删除 .old。
-    new_updater = new_root / UPDATER_EXE_NAME
-    cur_updater = app_dir / UPDATER_EXE_NAME
+    # 自更新 Updater：rename 为 .old，复制新版本；下次启动时清理。
+    new_updater = new_root / UPDATER_BINARY_NAME
+    cur_updater = app_dir / UPDATER_BINARY_NAME
     if new_updater.exists():
         if cur_updater.exists():
-            log.info("自更新: rename %s → %s.old", UPDATER_EXE_NAME, UPDATER_EXE_NAME)
+            log.info("自更新: rename %s → %s.old", UPDATER_BINARY_NAME, UPDATER_BINARY_NAME)
             try:
-                os.rename(str(cur_updater), str(cur_updater.with_suffix(".exe.old")))
+                os.rename(str(cur_updater), str(cur_updater.with_name(cur_updater.name + ".old")))
             except OSError as e:
-                log.warning("rename %s 失败（可能未在运行，忽略）: %s", UPDATER_EXE_NAME, e)
+                log.warning("rename %s 失败（可能未在运行，忽略）: %s", UPDATER_BINARY_NAME, e)
         try:
             shutil.copy2(str(new_updater), str(cur_updater))
-            log.info("已写入新 %s", UPDATER_EXE_NAME)
+            log.info("已写入新 %s", UPDATER_BINARY_NAME)
         except OSError as e:
-            log.warning("写入新 %s 失败（不影响主程序更新）: %s", UPDATER_EXE_NAME, e)
+            log.warning("写入新 %s 失败（不影响主程序更新）: %s", UPDATER_BINARY_NAME, e)
 
     # 写入新内容 —— 同样带重试
     log.info("写入新 %s/", internal_name)
@@ -964,20 +963,35 @@ def _apply_part(
             orig = app_dir / rel
             is_dir = new_src.is_dir()
 
-            # 自更新 Updater.exe：rename 为 .old 而非 .bak，下次启动时清理
-            if rel == UPDATER_EXE_NAME:
+            # 自更新 Updater：rename 为 .old 而非 .bak，下次启动时清理
+            if rel == UPDATER_BINARY_NAME:
                 if orig.exists():
-                    old_path = orig.with_suffix(".exe.old")
-                    log.info("[%s] 自更新: rename %s → %s.old", part_id, UPDATER_EXE_NAME, UPDATER_EXE_NAME)
+                    old_path = orig.with_name(orig.name + ".old")
+                    log.info(
+                        "[%s] 自更新: rename %s → %s.old",
+                        part_id,
+                        UPDATER_BINARY_NAME,
+                        UPDATER_BINARY_NAME,
+                    )
                     try:
                         os.rename(str(orig), str(old_path))
                     except OSError as e:
-                        log.warning("[%s] rename %s 失败（忽略）: %s", part_id, UPDATER_EXE_NAME, e)
+                        log.warning(
+                            "[%s] rename %s 失败（忽略）: %s",
+                            part_id,
+                            UPDATER_BINARY_NAME,
+                            e,
+                        )
                 try:
                     shutil.copy2(str(new_src), str(orig))
-                    log.info("[%s] 已写入新 %s", part_id, UPDATER_EXE_NAME)
+                    log.info("[%s] 已写入新 %s", part_id, UPDATER_BINARY_NAME)
                 except OSError as e:
-                    log.warning("[%s] 写入新 %s 失败（不影响主程序更新）: %s", part_id, UPDATER_EXE_NAME, e)
+                    log.warning(
+                        "[%s] 写入新 %s 失败（不影响主程序更新）: %s",
+                        part_id,
+                        UPDATER_BINARY_NAME,
+                        e,
+                    )
                 continue
 
             bak = app_dir / (rel + ".bak")

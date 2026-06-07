@@ -45,6 +45,7 @@ from qfluentwidgets import (
     SettingCardGroup,
 )
 
+from strange_uta_game.frontend.font_utils import DEFAULT_FONT_FAMILY
 from ..cards import SwitchSettingCard
 from ..dictionary_dialog import DictionaryEditDialog
 from ..network_dictionary_dialog import NetworkDictionaryDialog
@@ -80,14 +81,14 @@ class PriorityOrderDialog(QDialog):
         layout.setSpacing(12)
 
         title = QLabel("字典源优先级")
-        title.setFont(QFont("Microsoft YaHei", 14))
+        title.setFont(QFont(DEFAULT_FONT_FAMILY, 14))
         layout.addWidget(title)
 
         desc = QLabel(
             "lookup 时按下方顺序自顶向下遍历各字典源，每源内按 entries 自顶向下首个命中即停。\n"
             "📒 本地词典 sentinel 代表 dictionary.json；其他项对应网络源。"
         )
-        desc.setFont(QFont("Microsoft YaHei", 10))
+        desc.setFont(QFont(DEFAULT_FONT_FAMILY, 10))
         desc.setWordWrap(True)
         layout.addWidget(desc)
 
@@ -166,7 +167,7 @@ class DictionarySubInterface(SubSettingInterface):
         dict_card = SettingCard(FIF.DICTIONARY, "自定义读音",
             "固定特定词汇的注音读法（最长匹配优先）", g)
         self.btn_open_dict = PushButton("编辑词典", dict_card)
-        self.btn_open_dict.setFont(QFont("Microsoft YaHei", 10))
+        self.btn_open_dict.setFont(QFont(DEFAULT_FONT_FAMILY, 10))
         self.btn_open_dict.clicked.connect(self._on_open_dictionary)
         dict_card.hBoxLayout.addWidget(self.btn_open_dict, 0, Qt.AlignmentFlag.AlignRight)
         dict_card.hBoxLayout.addSpacing(16)
@@ -182,7 +183,7 @@ class DictionarySubInterface(SubSettingInterface):
         net_card = SettingCard(FIF.CLOUD_DOWNLOAD, "网络词典管理",
             "管理网络词典源（含 RL 官方 )，可添加自定义 URL、查看条目", g)
         self.btn_open_net = PushButton("管理网络词典", net_card)
-        self.btn_open_net.setFont(QFont("Microsoft YaHei", 10))
+        self.btn_open_net.setFont(QFont(DEFAULT_FONT_FAMILY, 10))
         self.btn_open_net.clicked.connect(self._on_open_network_dictionary)
         net_card.hBoxLayout.addWidget(self.btn_open_net, 0, Qt.AlignmentFlag.AlignRight)
         net_card.hBoxLayout.addSpacing(16)
@@ -218,7 +219,7 @@ class DictionarySubInterface(SubSettingInterface):
         prio_card = SettingCard(FIF.ALIGNMENT, "字典源优先级",
             "调整本地词典与各网络源的全局优先级（自顶向下递减）", g)
         self.btn_open_prio = PushButton("编辑优先级", prio_card)
-        self.btn_open_prio.setFont(QFont("Microsoft YaHei", 10))
+        self.btn_open_prio.setFont(QFont(DEFAULT_FONT_FAMILY, 10))
         self.btn_open_prio.clicked.connect(self._on_open_priority_order)
         prio_card.hBoxLayout.addWidget(self.btn_open_prio, 0, Qt.AlignmentFlag.AlignRight)
         prio_card.hBoxLayout.addSpacing(16)
@@ -309,7 +310,7 @@ class DictionarySubInterface(SubSettingInterface):
         test_card = SettingCard(FIF.CONNECT, "测试连通性",
             "用当前配置对一行示例发起注音请求，验证地址/Key/模型是否可用", g)
         self.btn_llm_test = PushButton("测试", test_card)
-        self.btn_llm_test.setFont(QFont("Microsoft YaHei", 10))
+        self.btn_llm_test.setFont(QFont(DEFAULT_FONT_FAMILY, 10))
         self.btn_llm_test.clicked.connect(self._on_llm_test)
         test_card.hBoxLayout.addWidget(self.btn_llm_test, 0, Qt.AlignmentFlag.AlignRight)
         test_card.hBoxLayout.addSpacing(16)

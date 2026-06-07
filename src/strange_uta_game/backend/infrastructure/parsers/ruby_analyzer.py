@@ -1,9 +1,11 @@
 """注音分析器 - 为日文文本提供假名注音。
 
-主引擎为 WinRT IME（Windows.Globalization.JapanesePhoneticAnalyzer，上下文
-感知复合词分析）；不可用时降级 pykakasi（单字分析），最后 DummyAnalyzer。
+Windows 主引擎为 WinRT IME（Windows.Globalization.JapanesePhoneticAnalyzer）；
+macOS/Linux 主引擎为 Sudachi。两者都复用上下文感知复合词分配逻辑，不可用时
+降级 pykakasi（单字分析），最后 DummyAnalyzer。
 """
 
+import sys
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import List, Optional, Tuple
@@ -767,24 +769,20 @@ def install_winrt_japanese(timeout: int = 600) -> Tuple[bool, str]:
 def create_analyzer(use_pykakasi: bool = True) -> RubyAnalyzer:
     """创建注音分析器。
 
-    回退链：WinRTAnalyzer → SudachiAnalyzer → PykakasiAnalyzer → DummyAnalyzer。
-
-    - main 变体：WinRT 可用则直接使用；缺日语 IME 由 UI 引导安装后再用。
-    - noWinIME / mac 变体：winrt 包不存在，直接跳至 Sudachi。
+    Windows 固定优先使用 WinRT；macOS/Linux 固定优先使用 Sudachi。
+    平台主引擎不可用时，降级到 PykakasiAnalyzer → DummyAnalyzer。
     """
-    try:
-        return WinRTAnalyzer()
-    except WinRTJapaneseUnavailable:
-        # 缺日语 IME 引擎：UI 层引导安装；此处先降级
-        pass
-    except ImportError:
-        # 缺 winrt 包（noWinIME / mac 变体）：直接降级
-        pass
-
-    try:
-        return SudachiAnalyzer()
-    except ImportError:
-        pass
+    if sys.platform == "win32":
+        try:
+            return WinRTAnalyzer()
+        except (WinRTJapaneseUnavailable, ImportError):
+            # 缺日语 IME 引擎时，UI 层仍会提供安装引导；这里先降级保证可用。
+            pass
+    else:
+        try:
+            return SudachiAnalyzer()
+        except ImportError:
+            pass
 
     if use_pykakasi:
         try:
@@ -812,6 +810,29 @@ def _group_reading_for_character(reading: str, checkpoint_count: int) -> List[st
     if checkpoint_count <= 1:
         return [reading]
     return split_ruby_for_checkpoints(reading, checkpoint_count)
+
+
+def is_all_katakana(text: str) -> bool:
+    """Return True when text is made only of katakana word characters."""
+    if not text:
+        return False
+    for char in text:
+        code = ord(char)
+        if char in "ー・":
+            continue
+        if not (0x30A1 <= code <= 0x30FF):
+            return False
+    return True
+
+
+def is_english_reading(reading: str) -> bool:
+    """Return True for simple English readings from dictionary/LLM output."""
+    if not reading:
+        return False
+    return any(c.isascii() and c.isalpha() for c in reading) and all(
+        c.isascii() and (c.isalpha() or c in " -'")
+        for c in reading
+    )
 
 
 def analyze_sentence_ruby(

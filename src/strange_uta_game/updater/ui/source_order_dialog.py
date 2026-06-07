@@ -30,6 +30,7 @@ from qfluentwidgets import (
     TitleLabel,
 )
 
+from strange_uta_game.frontend.font_utils import DEFAULT_FONT_FAMILY
 from ..sources import SOURCE_IDS, SOURCE_LABELS, SourceId, normalize_order
 
 
@@ -83,7 +84,7 @@ class SourceOrderDialog(MessageBoxBase):
         self.list_widget.setDragDropMode(QAbstractItemView.DragDropMode.InternalMove)
         self.list_widget.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self.list_widget.setDefaultDropAction(Qt.DropAction.MoveAction)
-        self.list_widget.setFont(QFont("Microsoft YaHei", 10))
+        self.list_widget.setFont(QFont(DEFAULT_FONT_FAMILY, 10))
         self.list_widget.setMinimumWidth(360)
         self.list_widget.setMinimumHeight(180)
         self.list_widget.setAlternatingRowColors(True)
@@ -99,15 +100,15 @@ class SourceOrderDialog(MessageBoxBase):
         btn_col_layout.setContentsMargins(0, 0, 0, 0)
         btn_col_layout.setSpacing(6)
         self.btn_up = PushButton("↑ 上移", btn_col)
-        self.btn_up.setFont(QFont("Microsoft YaHei", 10))
+        self.btn_up.setFont(QFont(DEFAULT_FONT_FAMILY, 10))
         self.btn_up.clicked.connect(self._on_up)
         btn_col_layout.addWidget(self.btn_up)
         self.btn_down = PushButton("↓ 下移", btn_col)
-        self.btn_down.setFont(QFont("Microsoft YaHei", 10))
+        self.btn_down.setFont(QFont(DEFAULT_FONT_FAMILY, 10))
         self.btn_down.clicked.connect(self._on_down)
         btn_col_layout.addWidget(self.btn_down)
         self.btn_reset = PushButton("恢复默认", btn_col)
-        self.btn_reset.setFont(QFont("Microsoft YaHei", 10))
+        self.btn_reset.setFont(QFont(DEFAULT_FONT_FAMILY, 10))
         self.btn_reset.clicked.connect(self._on_reset)
         btn_col_layout.addWidget(self.btn_reset)
         btn_col_layout.addStretch(1)

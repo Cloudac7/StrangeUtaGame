@@ -29,6 +29,7 @@ from qfluentwidgets import (
     SettingCardGroup,
 )
 
+from strange_uta_game.frontend.font_utils import DEFAULT_FONT_FAMILY
 from .. import http_client
 from ..proxy import (
     COMMON_PROXY_PORTS,
@@ -100,9 +101,9 @@ class _ProxyStatusCard(SettingCard):
             parent,
         )
         self.btn_detect = PushButton("自动检测", self)
-        self.btn_detect.setFont(QFont("Microsoft YaHei", 10))
+        self.btn_detect.setFont(QFont(DEFAULT_FONT_FAMILY, 10))
         self.btn_test = PushButton("测试连通性", self)
-        self.btn_test.setFont(QFont("Microsoft YaHei", 10))
+        self.btn_test.setFont(QFont(DEFAULT_FONT_FAMILY, 10))
         self.hBoxLayout.addWidget(self.btn_detect, 0, Qt.AlignmentFlag.AlignRight)
         self.hBoxLayout.addWidget(self.btn_test, 0, Qt.AlignmentFlag.AlignRight)
         self.hBoxLayout.addSpacing(16)

@@ -42,6 +42,8 @@ from qfluentwidgets import (
     SubtitleLabel,
 )
 
+from strange_uta_game.frontend.font_utils import DEFAULT_FONT_FAMILY
+
 # 匹配 @Emoji 或 @EmojiN= 开头的行（大小写不敏感）
 _EMOJI_TAG_RE = re.compile(r"^@Emoji\d*=", re.IGNORECASE)
 
@@ -156,12 +158,12 @@ class EmojiTagDialog(QDialog):
         header = QHBoxLayout()
         lbl_singer = QLabel("演唱者")
         lbl_singer.setFixedWidth(90)
-        lbl_singer.setFont(QFont("Microsoft YaHei", 9))
+        lbl_singer.setFont(QFont(DEFAULT_FONT_FAMILY, 9))
         lbl_trigger = QLabel("触发字符")
         lbl_trigger.setFixedWidth(130)
-        lbl_trigger.setFont(QFont("Microsoft YaHei", 9))
+        lbl_trigger.setFont(QFont(DEFAULT_FONT_FAMILY, 9))
         lbl_params = QLabel("参数（前画像, 后画像, 选项...）")
-        lbl_params.setFont(QFont("Microsoft YaHei", 9))
+        lbl_params.setFont(QFont(DEFAULT_FONT_FAMILY, 9))
         header.addWidget(lbl_singer)
         header.addWidget(lbl_trigger)
         header.addWidget(lbl_params)
@@ -219,13 +221,13 @@ class EmojiTagDialog(QDialog):
 
             trigger_edit = LineEdit()
             trigger_edit.setFixedWidth(130)
-            trigger_edit.setFont(QFont("Microsoft YaHei", 10))
+            trigger_edit.setFont(QFont(DEFAULT_FONT_FAMILY, 10))
             trigger_edit.setText(f"【{singer_name}】")
             trigger_edit.setPlaceholderText("触发字符")
             row_layout.addWidget(trigger_edit)
 
             params_edit = LineEdit()
-            params_edit.setFont(QFont("Microsoft YaHei", 10))
+            params_edit.setFont(QFont(DEFAULT_FONT_FAMILY, 10))
             params_edit.setText(default_params)
             params_edit.setPlaceholderText("前画像,后画像（可空）,选项...")
             row_layout.addWidget(params_edit)

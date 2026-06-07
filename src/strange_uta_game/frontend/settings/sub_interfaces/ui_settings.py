@@ -6,6 +6,7 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QFont
 from qfluentwidgets import FluentIcon as FIF, PushButton, SettingCard, SettingCardGroup
 
+from strange_uta_game.frontend.font_utils import DEFAULT_FONT_FAMILY
 from ..cards import ComboSettingCard, DoubleSpinSettingCard, FontSettingCard, SpinSettingCard
 from ..checkpoint_marker_dialog import CheckpointMarkerDialog
 from .base import SubSettingInterface
@@ -28,7 +29,7 @@ class UISubInterface(SubSettingInterface):
         self.card_main_font = FontSettingCard(FIF.FONT, "主文字字体",
             "卡拉OK预览主文字（当前行/上下文行）字体，取自系统已安装字体；同时用于全文本编辑的字宽统计", parent=g)
         self.card_ruby_font = FontSettingCard(FIF.FONT, "注音字体",
-            "卡拉OK预览 Ruby 注音字体（节奏点标记字体固定为微软雅黑，不可更改）", parent=g)
+            "卡拉OK预览 Ruby 注音字体（节奏点标记字体固定为平台默认字体，不可更改）", parent=g)
         self.card_font_size = SpinSettingCard(FIF.FONT_SIZE, "基础字体大小",
             "非当前行的歌词字体像素大小", min_val=1, max_val=99, step=2, suffix=" px", parent=g)
         self.card_current_line_font_size = SpinSettingCard(FIF.FONT_SIZE, "当前行字体大小",
@@ -96,8 +97,8 @@ class UISubInterface(SubSettingInterface):
         self.card_theme.setVisible(not embedded)
         theme_idx = {"auto": 0, "light": 1, "dark": 2}.get(s.get("ui.theme", "auto"), 0)
         self.card_theme.setCurrentIndex(theme_idx)
-        self.card_main_font.setValue(s.get("ui.main_font", "Microsoft YaHei"))
-        self.card_ruby_font.setValue(s.get("ui.ruby_font", "Microsoft YaHei"))
+        self.card_main_font.setValue(s.get("ui.main_font", DEFAULT_FONT_FAMILY))
+        self.card_ruby_font.setValue(s.get("ui.ruby_font", DEFAULT_FONT_FAMILY))
         self.card_font_size.setValue(s.get("ui.font_size", 18))
         self.card_current_line_font_size.setValue(s.get("ui.current_line_font_size", 22))
         self.card_ruby_size.setValue(s.get("ui.ruby_size", 10))

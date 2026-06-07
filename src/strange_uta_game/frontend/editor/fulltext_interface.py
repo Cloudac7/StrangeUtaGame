@@ -55,6 +55,7 @@ from strange_uta_game.backend.infrastructure.parsers.text_splitter import (
     CharType,
     get_char_type,
 )
+from strange_uta_game.frontend.font_utils import DEFAULT_FONT_FAMILY
 
 
 def _ruby_is_all_hiragana(ruby_text: str) -> bool:
@@ -387,7 +388,7 @@ class DeleteRubyByTypeDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle("按类型删除注音")
         self.resize(320, 400)
-        self.setFont(QFont("Microsoft YaHei", 10))
+        self.setFont(QFont(DEFAULT_FONT_FAMILY, 10))
 
         layout = QVBoxLayout(self)
         layout.setSpacing(8)
@@ -499,7 +500,7 @@ class RubyInterface(QWidget):
         _settings = AppSettings()
         _saved_font_size = _settings.get("fulltext_editor.font_size", 12)
         _saved_show_ch = _settings.get("fulltext_editor.show_ch_width", True)
-        self._ch_width_font = _settings.get("ui.main_font", "Microsoft YaHei")
+        self._ch_width_font = _settings.get("ui.main_font", DEFAULT_FONT_FAMILY)
 
         batch_layout.addWidget(CaptionLabel("字号"))
         self.spin_font = SpinBox(self)
@@ -527,7 +528,7 @@ class RubyInterface(QWidget):
 
         # 全文本编辑器（带行号栏 + 语法着色，Alt+滚轮缩放字体）
         self.text_edit = LineNumberPlainTextEdit()
-        self.text_edit.setFont(QFont("Microsoft YaHei", 12))
+        self.text_edit.setFont(QFont(DEFAULT_FONT_FAMILY, 12))
         self.text_edit.setPlaceholderText(
             "加载项目后，歌词将以带时间戳的注音格式显示在此处...\n"
             "示例: {大冒険||[00:01.00]だ|[00:01.20]い,...}"
@@ -601,7 +602,7 @@ class RubyInterface(QWidget):
         """设置变更时，重新读取卡拉OK主文字字体并应用到字宽统计。"""
         from strange_uta_game.frontend.settings.settings_interface import AppSettings
 
-        self._ch_width_font = AppSettings().get("ui.main_font", "Microsoft YaHei")
+        self._ch_width_font = AppSettings().get("ui.main_font", DEFAULT_FONT_FAMILY)
         effective = self.text_edit.set_ch_width_font(self._ch_width_font)
         self._update_ch_font_label(effective)
 
