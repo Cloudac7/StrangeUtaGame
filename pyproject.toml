@@ -73,8 +73,12 @@ unix = [
     "SudachiPy>=0.6.11",
     "SudachiDict-small>=20260428",
 ]
+sudachi = [
+    "SudachiPy>=0.6.11",
+    "SudachiDict-small>=20260428",
+]
 # 全平台 + 开发
-all = ["strange-uta-game[win,unix,dev,build]"]
+all = ["strange-uta-game[win,sudachi,dev,build]"]
 
 [project.scripts]
 strange-uta-game = "strange_uta_game.main:main"

@@ -3,7 +3,8 @@
 # pip install -r requirements.txt
 #
 # 注音引擎：
-# - Windows: WinRT JapanesePhoneticAnalyzer
+# - Windows main: WinRT JapanesePhoneticAnalyzer
+# - Windows noWinIME: SudachiPy + SudachiDict-small（需额外安装 .[sudachi]）
 # - macOS/Linux: SudachiPy + SudachiDict-small
 #
 # 如需开发/打包工具，额外安装：

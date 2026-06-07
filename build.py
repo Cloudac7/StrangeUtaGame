@@ -3,13 +3,15 @@
 注意事项：
 1. sounddevice 和 soundfile 依赖 PortAudio / libsndfile，需要确保 DLL 被打包
 2. PyQt6 有平台插件需要处理
-3. Windows 日语注音统一使用 WinRT；macOS/Linux 使用 Sudachi small
+3. Windows main 变体使用 WinRT；Windows noWinIME 与 macOS/Linux 使用 Sudachi small
 4. numpy 是音频引擎核心依赖，不可排除
 5. 使用 --onedir 模式避免单文件解压问题
 """
 
 import argparse
+import contextlib
 import PyInstaller.__main__
+import re
 import sys
 from pathlib import Path
 
@@ -32,11 +34,49 @@ _force_utf8_stdio()
 # 命令行参数
 parser = argparse.ArgumentParser(description="PyInstaller 打包脚本")
 parser.add_argument("--clean", action="store_true", help="传给 PyInstaller --clean，完整重建")
+parser.add_argument(
+    "--variant",
+    choices=["main", "noWinIME", "mac"],
+    default=None,
+    help="发布变体：main=默认，noWinIME=Windows 无 WinRT，mac=macOS",
+)
 _cli_args = parser.parse_args()
 
 # 项目根目录
 PROJECT_ROOT = Path(__file__).parent.absolute()
 VERSION_FILE = PROJECT_ROOT / "src" / "strange_uta_game" / "__version__.py"
+
+_DEFAULT_VARIANT = "mac" if sys.platform == "darwin" else "main"
+_CLI_VARIANT = _cli_args.variant or _DEFAULT_VARIANT
+VARIANT = "" if _CLI_VARIANT == "main" else _CLI_VARIANT
+APP_NAME = "StrangeUtaGame" if not VARIANT else f"StrangeUtaGame-{VARIANT}"
+USE_WINRT_JAPANESE = sys.platform == "win32" and not VARIANT
+USE_SUDACHI_JAPANESE = not USE_WINRT_JAPANESE
+
+if VARIANT == "mac" and sys.platform != "darwin":
+    raise SystemExit("mac 变体只能在 macOS 上构建")
+if VARIANT == "noWinIME" and sys.platform != "win32":
+    raise SystemExit("noWinIME 变体只用于 Windows 构建")
+
+
+@contextlib.contextmanager
+def _temporary_version_variant(variant: str):
+    """打包期间写入 VARIANT，确保运行时和更新器读取到正确资产名。"""
+    original = VERSION_FILE.read_text(encoding="utf-8")
+    updated, count = re.subn(
+        r'(^VARIANT\s*=\s*)["\'][^"\']*["\']',
+        rf'\g<1>"{variant}"',
+        original,
+        count=1,
+        flags=re.MULTILINE,
+    )
+    if count != 1:
+        raise SystemExit(f"未能在 {VERSION_FILE} 中替换 VARIANT")
+    VERSION_FILE.write_text(updated, encoding="utf-8")
+    try:
+        yield
+    finally:
+        VERSION_FILE.write_text(original, encoding="utf-8")
 
 # 让当前 src/ 屏蔽环境中残留的旧 editable install，避免 PyInstaller
 # 错误收集其它工作区的 bytecode。
@@ -65,6 +105,8 @@ except ImportError:
     print(f"  (尚未 import strange_uta_game，将走 sys.path 首项: {_SRC_DIR})")
 
 # 检查依赖
+print(f"构建变体: {_CLI_VARIANT} (app={APP_NAME})")
+print("日语注音引擎:", "WinRT" if USE_WINRT_JAPANESE else "SudachiPy + SudachiDict-small")
 print("检查依赖...")
 try:
     import PyQt6
@@ -75,7 +117,7 @@ try:
     import numpy
     import pykakasi
     import jaconv
-    if sys.platform == "win32":
+    if USE_WINRT_JAPANESE:
         import winrt.windows.globalization
         import winrt.windows.foundation
         import winrt.windows.foundation.collections
@@ -95,13 +137,16 @@ try:
 except ImportError as e:
     print(f"✗ 缺少依赖: {e}")
     print("请先运行: pip install -r requirements.txt")
-    print("  pip install -e .[dev]")
+    if USE_SUDACHI_JAPANESE and sys.platform == "win32":
+        print("Windows noWinIME 变体还需要:")
+        print("  pip install -e .[sudachi]")
+    print("  pip install -e .[dev,build]")
     sys.exit(1)
 
 # PyInstaller --add-data 分隔符：Windows 用 ;，Unix 用 :
 _DATA_SEP = ";" if sys.platform == "win32" else ":"
 
-if sys.platform == "win32":
+if USE_WINRT_JAPANESE:
     _platform_imports = [
         "--hidden-import=winrt.windows.globalization",
         "--hidden-import=winrt.windows.foundation",
@@ -136,7 +181,7 @@ else:
 # 构建 PyInstaller 参数
 args = [
     "main.py",  # 主脚本
-    "--name=StrangeUtaGame",  # 应用名称
+    f"--name={APP_NAME}",  # 应用名称
     "--onedir",  # 使用目录模式（推荐，启动更快）
     "--windowed",  # 隐藏控制台窗口（macOS 生成 .app bundle）
     "--noconfirm",  # 不确认覆盖
@@ -255,17 +300,18 @@ print("\n开始打包...")
 print(f"输出目录: {PROJECT_ROOT / 'dist'}")
 
 # 运行 PyInstaller
-PyInstaller.__main__.run(args)
+with _temporary_version_variant(VARIANT):
+    PyInstaller.__main__.run(args)
 
 print("\n✓ 打包完成!")
-print(f"可执行文件位于: {PROJECT_ROOT / 'dist' / 'StrangeUtaGame'}")
+print(f"可执行文件位于: {PROJECT_ROOT / 'dist' / APP_NAME}")
 
 # ── 修复 ARM64 Windows 上 PortAudio DLL 缺失问题 ──────────────
 # sounddevice 在 ARM64 Windows 上会查找 libportaudioarm64.dll（platform.machine()
 # 返回 'ARM64'），但 portaudio-binaries 目录只包含 x64 版本。ARM64 Windows 可通过
 # x64 模拟层加载 x64 DLL，所以直接复制重命名即可。
 if sys.platform == "win32":
-    _internal = PROJECT_ROOT / "dist" / "StrangeUtaGame" / "_internal"
+    _internal = PROJECT_ROOT / "dist" / APP_NAME / "_internal"
     _pa_64bit = _internal / "libportaudio64bit.dll"
     _pa_arm64 = _internal / "libportaudioarm64.dll"
     if _pa_64bit.exists() and not _pa_arm64.exists():
@@ -292,12 +338,12 @@ if sys.platform == "darwin":
     _updater_dst_dir = (
         PROJECT_ROOT
         / "dist"
-        / "StrangeUtaGame.app"
+        / f"{APP_NAME}.app"
         / "Contents"
         / "MacOS"
     )
 else:
-    _updater_dst_dir = PROJECT_ROOT / "dist" / "StrangeUtaGame"
+    _updater_dst_dir = PROJECT_ROOT / "dist" / APP_NAME
 _updater_dst = _updater_dst_dir / _UPDATER_BIN
 _updater_found = False
 if _updater_dst_dir.exists():
@@ -326,7 +372,7 @@ else:
 # PyInstaller 会在生成 macOS App 时完成一次签名。之后新增 Updater 会改变 bundle，
 # 因此需要重新做 ad-hoc 签名，避免 Gatekeeper 判定 App 已被修改。
 if sys.platform == "darwin" and _updater_found:
-    _app_bundle = PROJECT_ROOT / "dist" / "StrangeUtaGame.app"
+    _app_bundle = PROJECT_ROOT / "dist" / f"{APP_NAME}.app"
     try:
         import subprocess as _subprocess
 
@@ -341,13 +387,13 @@ if sys.platform == "darwin" and _updater_found:
 # ── 验证 updater 子包是否被 PyInstaller 收集 ──────────────────────
 if sys.platform == "darwin":
     _updater_pkg_candidates = [
-        PROJECT_ROOT / "dist" / "StrangeUtaGame.app" / "Contents" / location
+        PROJECT_ROOT / "dist" / f"{APP_NAME}.app" / "Contents" / location
         / "strange_uta_game" / "updater"
         for location in ("Frameworks", "Resources")
     ]
 else:
     _updater_pkg_candidates = [
-        PROJECT_ROOT / "dist" / "StrangeUtaGame" / "_internal"
+        PROJECT_ROOT / "dist" / APP_NAME / "_internal"
         / "strange_uta_game" / "updater"
     ]
 
@@ -372,7 +418,10 @@ print("1. 测试音频功能是否正常（播放/暂停/变速）")
 print("2. 检查项目保存和打开功能")
 print("3. 验证导出功能（LRC/KRA/ASS 等）")
 if sys.platform == "win32":
-    print("4. 测试日语注音功能（WinRT JapanesePhoneticAnalyzer）")
+    if USE_WINRT_JAPANESE:
+        print("4. 测试日语注音功能（WinRT JapanesePhoneticAnalyzer）")
+    else:
+        print("4. 测试日语注音功能（SudachiPy + SudachiDict-small）")
 else:
     print("4. 测试日语注音功能（SudachiPy + SudachiDict-small）")
 print("5. 如缺少 DLL，请安装 Visual C++ Redistributable")

@@ -1,10 +1,10 @@
 # StrangeUtaGame 跨平台测试 + 打包流水线
 #
-# 支持平台: Linux / macOS x86_64 / macOS ARM64 / Windows amd64
+# 支持平台: Linux / macOS x86_64 / macOS ARM64 / Windows amd64 / Windows noWinIME amd64
 #
 # 触发方式:
 #   - workflow_dispatch:
-#       platform = all|Linux|macOS-x86|macOS-ARM|Windows
+#       platform = all|Linux|macOS-x86|macOS-ARM|Windows|Windows-noWinIME
 #       job      = test | build | full
 #   - 推送 tag SUGv*  → 全平台 full（测试 + 构建 + Release draft）
 
@@ -26,6 +26,7 @@ on:
           - macOS-x86
           - macOS-ARM
           - Windows
+          - Windows-noWinIME
       job:
         description: "执行内容"
         default: "test"
@@ -129,31 +130,52 @@ jobs:
         include:
           - os: Linux
             runner: ubuntu-24.04
+            platform: Linux
+            variant: main
+            app_name: StrangeUtaGame
             artifact_name: StrangeUtaGame-linux-x86_64
             ext: .tar.gz
             updater_name: Updater
 
           - os: macOS-x86
             runner: macos-15-intel
+            platform: macOS-x86
+            variant: mac
+            app_name: StrangeUtaGame-mac
             artifact_name: StrangeUtaGame-macos-x86_64
             ext: .zip
             updater_name: Updater
 
           - os: macOS-ARM
             runner: macos-15
+            platform: macOS-ARM
+            variant: mac
+            app_name: StrangeUtaGame-mac
             artifact_name: StrangeUtaGame-macos-arm64
             ext: .zip
             updater_name: Updater
 
           - os: Windows
             runner: windows-2025
+            platform: Windows
+            variant: main
+            app_name: StrangeUtaGame
             artifact_name: StrangeUtaGame-windows-amd64
+            ext: .zip
+            updater_name: Updater.exe
+
+          - os: Windows-noWinIME
+            runner: windows-2025
+            platform: Windows-noWinIME
+            variant: noWinIME
+            app_name: StrangeUtaGame-noWinIME
+            artifact_name: StrangeUtaGame-windows-noWinIME-amd64
             ext: .zip
             updater_name: Updater.exe
 
     steps:
       - name: Skip if platform mismatch
-        if: needs._plan.outputs.platform != 'all' && needs._plan.outputs.platform != matrix.os
+        if: needs._plan.outputs.platform != 'all' && needs._plan.outputs.platform != matrix.platform
         run: exit 0
 
       - uses: actions/checkout@v4
@@ -194,6 +216,10 @@ jobs:
           pip install pyinstaller pyinstaller-hooks-contrib numpy
           pip install -r requirements.txt
 
+      - name: Install Sudachi deps for Windows noWinIME
+        if: matrix.variant == 'noWinIME'
+        run: pip install -e ".[sudachi]"
+
       # ── 构建 Updater（先于主程序，build.py 会自动复制） ──
       # 缓存 PyInstaller workpath → 跨版本增量编译
       - name: Restore Updater workpath cache
@@ -217,23 +243,23 @@ jobs:
         run: python updater_app/build_updater.py --skip-if-exists
 
       - name: Build Main App
-        run: python build.py
+        run: python build.py --variant ${{ matrix.variant }}
 
       - name: Verify bundled Updater (Linux)
         if: runner.os == 'Linux'
         shell: bash
-        run: test -x dist/StrangeUtaGame/Updater
+        run: test -x dist/${{ matrix.app_name }}/Updater
 
       - name: Verify bundled Updater (macOS)
         if: runner.os == 'macOS'
         shell: bash
-        run: test -x dist/StrangeUtaGame.app/Contents/MacOS/Updater
+        run: test -x dist/${{ matrix.app_name }}.app/Contents/MacOS/Updater
 
       - name: Verify bundled Updater (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          if (-not (Test-Path "dist/StrangeUtaGame/Updater.exe" -PathType Leaf)) {
+          if (-not (Test-Path "dist/${{ matrix.app_name }}/Updater.exe" -PathType Leaf)) {
             Write-Error "Bundled Updater.exe not found"
             exit 1
           }
@@ -243,16 +269,16 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           cd dist
-          tar czf ../${{ matrix.artifact_name }}-${{ steps.version.outputs.app_version }}.tar.gz StrangeUtaGame/
+          tar czf ../${{ matrix.artifact_name }}-${{ steps.version.outputs.app_version }}.tar.gz ${{ matrix.app_name }}/
 
       - name: Package (macOS / .app)
         if: runner.os == 'macOS'
         run: |
           cd dist
-          if ls *.app 2>/dev/null; then
-            zip -r ../${{ matrix.artifact_name }}-${{ steps.version.outputs.app_version }}.zip *.app
-          elif [ -d "StrangeUtaGame" ]; then
-            zip -r ../${{ matrix.artifact_name }}-${{ steps.version.outputs.app_version }}.zip StrangeUtaGame/
+          if [ -d "${{ matrix.app_name }}.app" ]; then
+            zip -r ../${{ matrix.artifact_name }}-${{ steps.version.outputs.app_version }}.zip ${{ matrix.app_name }}.app
+          elif [ -d "${{ matrix.app_name }}" ]; then
+            zip -r ../${{ matrix.artifact_name }}-${{ steps.version.outputs.app_version }}.zip ${{ matrix.app_name }}/
           else
             echo "::error::Nothing found in dist/"; ls -la; exit 1
           fi
@@ -261,11 +287,11 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          if (Test-Path "dist/StrangeUtaGame") {
-            Compress-Archive -Path dist/StrangeUtaGame/* `
+          if (Test-Path "dist/${{ matrix.app_name }}") {
+            Compress-Archive -Path dist/${{ matrix.app_name }}/* `
               -DestinationPath ${{ matrix.artifact_name }}-${{ steps.version.outputs.app_version }}.zip
           } else {
-            Write-Error "dist/StrangeUtaGame not found"; Get-ChildItem dist; exit 1
+            Write-Error "dist/${{ matrix.app_name }} not found"; Get-ChildItem dist; exit 1
           }
 
       # Updater 已包含在主程序产物中，不再单独发布。

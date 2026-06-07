@@ -1,8 +1,9 @@
 """注音分析器 - 为日文文本提供假名注音。
 
-Windows 主引擎为 WinRT IME（Windows.Globalization.JapanesePhoneticAnalyzer）；
-macOS/Linux 主引擎为 Sudachi。两者都复用上下文感知复合词分配逻辑，不可用时
-降级 pykakasi（单字分析），最后 DummyAnalyzer。
+Windows main 变体主引擎为 WinRT IME
+（Windows.Globalization.JapanesePhoneticAnalyzer）；Windows noWinIME 与 macOS/Linux
+主引擎为 Sudachi。两者都复用上下文感知复合词分配逻辑，不可用时降级 pykakasi
+（单字分析），最后 DummyAnalyzer。
 """
 
 import sys
@@ -769,16 +770,23 @@ def install_winrt_japanese(timeout: int = 600) -> Tuple[bool, str]:
 def create_analyzer(use_pykakasi: bool = True) -> RubyAnalyzer:
     """创建注音分析器。
 
-    Windows 固定优先使用 WinRT；macOS/Linux 固定优先使用 Sudachi。
+    Windows main 优先使用 WinRT；Windows noWinIME 与 macOS/Linux 优先使用 Sudachi。
     平台主引擎不可用时，降级到 PykakasiAnalyzer → DummyAnalyzer。
     """
-    if sys.platform == "win32":
+    try:
+        from strange_uta_game.__version__ import VARIANT
+    except Exception:
+        VARIANT = ""
+
+    use_winrt = sys.platform == "win32" and VARIANT != "noWinIME"
+
+    if use_winrt:
         try:
             return WinRTAnalyzer()
         except (WinRTJapaneseUnavailable, ImportError):
             # 缺日语 IME 引擎时，UI 层仍会提供安装引导；这里先降级保证可用。
             pass
-    else:
+    if not use_winrt:
         try:
             return SudachiAnalyzer()
         except ImportError:
